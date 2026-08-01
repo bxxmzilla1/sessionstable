@@ -1,27 +1,72 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './components/Auth'
-import Toolbar from './components/Toolbar'
-import Spreadsheet from './components/Spreadsheet'
+import TableTabs from './components/TableTabs'
+import ViewBar from './components/ViewBar'
+import GridView from './components/GridView'
+import KanbanView from './components/KanbanView'
+import GalleryView from './components/GalleryView'
+import RecordModal from './components/RecordModal'
+import { defaultBase, displayValue, newField, newRecord, newView, uid } from './base'
+import { OPTION_PALETTE } from './constants'
 
-const DEFAULT_SHEET = () => ({ title: 'Sheet 1', rows: 50, cols: 12, cells: {}, formats: {} })
-
-function normalize(d) {
-  return {
-    title: d.title || 'Sheet 1',
-    rows: Math.max(1, d.rows || 50),
-    cols: Math.max(1, d.cols || 12),
-    cells: d.cells || {},
-    formats: d.formats || {},
+function matchFilter(field, value, op, target) {
+  const dv = displayValue(field, value).toLowerCase()
+  const t = String(target ?? '').toLowerCase()
+  const num = Number(value || 0)
+  const tnum = Number(target || 0)
+  switch (op) {
+    case 'contains': return dv.includes(t)
+    case 'notContains': return !dv.includes(t)
+    case 'is': return field.type === 'number' || field.type === 'rating' ? num === tnum : dv === t
+    case 'isNot': return field.type === 'number' || field.type === 'rating' ? num !== tnum : dv !== t
+    case 'lt': return num < tnum
+    case 'gt': return num > tnum
+    case 'lte': return num <= tnum
+    case 'gte': return num >= tnum
+    case 'empty': return dv === ''
+    case 'notEmpty': return dv !== ''
+    case 'checked': return !!value
+    case 'unchecked': return !value
+    default: return true
   }
+}
+
+function processRecords(table, view, search) {
+  const byId = (id) => table.fields.find((f) => f.id === id)
+  let recs = table.records
+
+  for (const flt of view.filters || []) {
+    const f = byId(flt.field)
+    if (!f) continue
+    recs = recs.filter((r) => matchFilter(f, r.cells[f.id], flt.op, flt.value))
+  }
+
+  const q = search.trim().toLowerCase()
+  if (q) recs = recs.filter((r) => table.fields.some((f) => displayValue(f, r.cells[f.id]).toLowerCase().includes(q)))
+
+  if (view.sort) {
+    const f = byId(view.sort.field)
+    if (f) {
+      const dir = view.sort.dir === 'asc' ? 1 : -1
+      recs = [...recs].sort((a, b) => {
+        if (f.type === 'number' || f.type === 'rating') return (Number(a.cells[f.id] || 0) - Number(b.cells[f.id] || 0)) * dir
+        const av = displayValue(f, a.cells[f.id]).toLowerCase()
+        const bv = displayValue(f, b.cells[f.id]).toLowerCase()
+        return av < bv ? -dir : av > bv ? dir : 0
+      })
+    }
+  }
+  return recs
 }
 
 export default function App() {
   const [session, setSession] = useState(null)
   const [ready, setReady] = useState(false)
-  const [sheet, setSheet] = useState(null)
-  const [selected, setSelected] = useState({ r: 0, c: 0 })
-  const [status, setStatus] = useState('idle') // idle | saving | saved | error
+  const [base, setBase] = useState(null)
+  const [status, setStatus] = useState('idle')
+  const [search, setSearch] = useState('')
+  const [expandedId, setExpandedId] = useState(null)
   const saveTimer = useRef(null)
   const loadedFor = useRef(null)
 
@@ -32,14 +77,13 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!session?.user) { setSheet(null); loadedFor.current = null; return }
+    if (!session?.user) { setBase(null); loadedFor.current = null; return }
     if (loadedFor.current === session.user.id) return
     loadedFor.current = session.user.id
     ;(async () => {
-      const { data, error } = await supabase
-        .from('sheets').select('data').eq('user_id', session.user.id).maybeSingle()
-      if (error) { console.error(error); setSheet(DEFAULT_SHEET()); return }
-      setSheet(data?.data?.rows ? normalize(data.data) : DEFAULT_SHEET())
+      const { data, error } = await supabase.from('sheets').select('data').eq('user_id', session.user.id).maybeSingle()
+      if (error) { console.error(error); setBase(defaultBase()); return }
+      setBase(data?.data?.tables ? data.data : defaultBase())
     })()
   }, [session])
 
@@ -54,47 +98,128 @@ export default function App() {
       )
       setStatus(error ? 'error' : 'saved')
       if (error) console.error(error)
-    }, 700)
+    }, 600)
   }, [session])
 
   const update = useCallback((mutator) => {
-    setSheet((prev) => {
-      const next = mutator(prev)
-      scheduleSave(next)
-      return next
-    })
+    setBase((prev) => { const next = mutator(prev); scheduleSave(next); return next })
   }, [scheduleSave])
 
-  const setCell = (r, c, value) => update((prev) => {
-    const cells = { ...prev.cells }
-    const k = r + ',' + c
-    if (value === '' || value == null) delete cells[k]
-    else cells[k] = value
-    return { ...prev, cells }
-  })
+  const mutateTable = useCallback((tableId, fn) => {
+    update((b) => ({ ...b, tables: b.tables.map((t) => (t.id === tableId ? fn(t) : t)) }))
+  }, [update])
 
-  const applyFormat = (patch) => update((prev) => {
-    const k = selected.r + ',' + selected.c
-    const cur = prev.formats[k] || {}
-    const merged = { ...cur, ...patch }
-    Object.keys(merged).forEach((key) => {
-      if (merged[key] === false || merged[key] === '' || merged[key] == null) delete merged[key]
-    })
-    const formats = { ...prev.formats }
-    if (Object.keys(merged).length) formats[k] = merged
-    else delete formats[k]
-    return { ...prev, formats }
-  })
+  const api = useMemo(() => ({
+    // Tables
+    addTable() {
+      update((b) => {
+        const name = newField('Name', 'text')
+        const notes = newField('Notes', 'longText')
+        const grid = newView('Grid', 'grid')
+        const t = { id: uid('tbl'), name: 'Table ' + (b.tables.length + 1), fields: [name, notes], records: [newRecord(), newRecord()], views: [grid], activeViewId: grid.id, primaryFieldId: name.id }
+        return { ...b, tables: [...b.tables, t], activeTableId: t.id }
+      })
+    },
+    renameTable(id, name) { mutateTable(id, (t) => ({ ...t, name: (name || '').trim() || t.name })) },
+    deleteTable(id) {
+      update((b) => {
+        if (b.tables.length <= 1) return b
+        const tables = b.tables.filter((t) => t.id !== id)
+        return { ...b, tables, activeTableId: b.activeTableId === id ? tables[0].id : b.activeTableId }
+      })
+    },
+    setActiveTable(id) { update((b) => ({ ...b, activeTableId: id })) },
 
-  const addRow = () => update((prev) => ({ ...prev, rows: Math.min(prev.rows + 1, 500) }))
-  const addCol = () => update((prev) => ({ ...prev, cols: Math.min(prev.cols + 1, 52) }))
-  const setTitle = (title) => update((prev) => ({ ...prev, title }))
+    // Views
+    addView(tableId, type) {
+      mutateTable(tableId, (t) => {
+        const count = t.views.filter((v) => v.type === type).length
+        const v = newView(type[0].toUpperCase() + type.slice(1) + (count ? ' ' + (count + 1) : ''), type)
+        if (type === 'kanban') v.groupField = t.fields.find((f) => f.type === 'singleSelect')?.id || null
+        return { ...t, views: [...t.views, v], activeViewId: v.id }
+      })
+    },
+    deleteView(tableId, viewId) {
+      mutateTable(tableId, (t) => {
+        if (t.views.length <= 1) return t
+        const views = t.views.filter((v) => v.id !== viewId)
+        return { ...t, views, activeViewId: t.activeViewId === viewId ? views[0].id : t.activeViewId }
+      })
+    },
+    setActiveView(tableId, viewId) { mutateTable(tableId, (t) => ({ ...t, activeViewId: viewId })) },
+    updateView(tableId, viewId, patch) {
+      mutateTable(tableId, (t) => ({ ...t, views: t.views.map((v) => (v.id === viewId ? { ...v, ...patch } : v)) }))
+    },
+    addFilter(tableId, viewId, filter) {
+      mutateTable(tableId, (t) => ({ ...t, views: t.views.map((v) => (v.id === viewId ? { ...v, filters: [...v.filters, filter] } : v)) }))
+    },
+    updateFilter(tableId, viewId, filterId, patch) {
+      mutateTable(tableId, (t) => ({ ...t, views: t.views.map((v) => (v.id === viewId ? { ...v, filters: v.filters.map((f) => (f.id === filterId ? { ...f, ...patch } : f)) } : v)) }))
+    },
+    removeFilter(tableId, viewId, filterId) {
+      mutateTable(tableId, (t) => ({ ...t, views: t.views.map((v) => (v.id === viewId ? { ...v, filters: v.filters.filter((f) => f.id !== filterId) } : v)) }))
+    },
+
+    // Fields
+    addField(tableId, patch) {
+      mutateTable(tableId, (t) => ({ ...t, fields: [...t.fields, newField(patch.name, patch.type, patch.options ? { options: patch.options } : {})] }))
+    },
+    updateField(tableId, fieldId, patch) {
+      mutateTable(tableId, (t) => ({
+        ...t,
+        fields: t.fields.map((f) => {
+          if (f.id !== fieldId) return f
+          const next = { ...f, name: patch.name ?? f.name, type: patch.type ?? f.type }
+          if (['singleSelect', 'multiSelect'].includes(next.type)) next.options = patch.options ?? f.options ?? []
+          else delete next.options
+          return next
+        }),
+      }))
+    },
+    deleteField(tableId, fieldId) {
+      mutateTable(tableId, (t) => {
+        if (t.fields.length <= 1) return t
+        const fields = t.fields.filter((f) => f.id !== fieldId)
+        const primaryFieldId = t.primaryFieldId === fieldId ? fields[0].id : t.primaryFieldId
+        const views = t.views.map((v) => ({
+          ...v,
+          hidden: v.hidden.filter((x) => x !== fieldId),
+          sort: v.sort?.field === fieldId ? null : v.sort,
+          groupField: v.groupField === fieldId ? null : v.groupField,
+          filters: v.filters.filter((f) => f.field !== fieldId),
+        }))
+        return { ...t, fields, primaryFieldId, views }
+      })
+    },
+    addSelectOption(tableId, fieldId, name) {
+      const id = uid('opt')
+      mutateTable(tableId, (t) => ({
+        ...t,
+        fields: t.fields.map((f) => {
+          if (f.id !== fieldId) return f
+          const opts = f.options || []
+          return { ...f, options: [...opts, { id, name, color: opts.length % OPTION_PALETTE.length }] }
+        }),
+      }))
+      return id
+    },
+
+    // Records
+    addRecord(tableId, preset = {}) { mutateTable(tableId, (t) => ({ ...t, records: [...t.records, newRecord({ ...preset })] })) },
+    updateCell(tableId, recordId, fieldId, value) {
+      mutateTable(tableId, (t) => ({ ...t, records: t.records.map((r) => (r.id === recordId ? { ...r, cells: { ...r.cells, [fieldId]: value } } : r)) }))
+    },
+    deleteRecord(tableId, recordId) { mutateTable(tableId, (t) => ({ ...t, records: t.records.filter((r) => r.id !== recordId) })) },
+  }), [update, mutateTable])
 
   if (!ready) return <div className="center muted">Loading…</div>
   if (!session) return <Auth />
-  if (!sheet) return <div className="center muted">Opening your sheet…</div>
+  if (!base) return <div className="center muted">Opening your base…</div>
 
-  const selKey = selected.r + ',' + selected.c
+  const table = base.tables.find((t) => t.id === base.activeTableId) || base.tables[0]
+  const view = table.views.find((v) => v.id === table.activeViewId) || table.views[0]
+  const records = processRecords(table, view, search)
+  const expanded = expandedId ? table.records.find((r) => r.id === expandedId) : null
 
   return (
     <div className="app">
@@ -105,27 +230,28 @@ export default function App() {
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}
         </span>
         <span className="email" title={session.user.email}>{session.user.email}</span>
-        <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button className="btn ghost sm" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </header>
 
-      <Toolbar
-        title={sheet.title}
-        onTitle={setTitle}
-        format={sheet.formats[selKey] || {}}
-        onFormat={applyFormat}
-        onAddRow={addRow}
-        onAddCol={addCol}
-        selected={selected}
-        cellRaw={sheet.cells[selKey] || ''}
-        onFormula={(v) => setCell(selected.r, selected.c, v)}
-      />
+      <TableTabs base={base} api={api} />
+      <ViewBar table={table} view={view} api={api} search={search} onSearch={setSearch} />
 
-      <Spreadsheet
-        sheet={sheet}
-        selected={selected}
-        onSelect={(r, c) => setSelected({ r, c })}
-        onEdit={setCell}
-      />
+      <div className="workspace">
+        {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+        {view.type === 'kanban' && <KanbanView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+        {view.type === 'gallery' && <GalleryView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+      </div>
+
+      {expanded && (
+        <RecordModal
+          table={table}
+          record={expanded}
+          onCell={(rid, fid, v) => api.updateCell(table.id, rid, fid, v)}
+          onAddOption={(fid, nm) => api.addSelectOption(table.id, fid, nm)}
+          onDelete={(rid) => api.deleteRecord(table.id, rid)}
+          onClose={() => setExpandedId(null)}
+        />
+      )}
     </div>
   )
 }

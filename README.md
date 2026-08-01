@@ -1,17 +1,22 @@
 # Sessions Table
 
-A Google-Sheets-style **PWA** that shares accounts with the **Sessions 4** desktop app.
+An Airtable-style database **PWA** that shares accounts with the **Sessions 4** desktop app.
 Sign in with the same Supabase account you use in Sessions 4, and you get your own
-spreadsheet that autosaves to the cloud. Modern light theme, purple accent, installable.
+base (tables, fields, records, views) that autosaves to the cloud. Modern light theme,
+purple accent, installable.
 
 ## Features
 
 - **Shared login** — same Supabase project as Sessions 4, so the same email/password works.
-- **One sheet per account** — data is stored per user in Supabase and protected by Row Level Security.
-- **Spreadsheet basics** — editable cells, add rows/columns, keyboard navigation (arrows / Enter / Tab).
-- **Formulas** — `=A1+B2`, `=SUM(A1:A10)`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `PRODUCT`.
-- **Formatting** — bold, italic, text alignment, and cell fill colors.
-- **Autosave** — changes are debounced and upserted to Supabase; a status shows "Saving…/All changes saved".
+- **One base per account** — data is stored per user in Supabase and protected by Row Level Security.
+- **Tables** — multiple tables per account; add, rename (double-click a tab), delete.
+- **Typed fields** — single line text, long text, number, checkbox, single/multiple select,
+  date, email, URL, phone, and rating. Add, rename, re-type, hide, or delete fields.
+- **Select options with colors** — Airtable-style colored tags, create options on the fly.
+- **Records** — add, edit inline, expand a record into a full editor, delete.
+- **Views** — Grid, Kanban (drag cards between stacks), and Gallery; create multiple views.
+- **Search, filter, sort, group, hide fields** — per view.
+- **Autosave** — debounced upserts to Supabase with a "Saving…/All changes saved" status.
 - **PWA** — installable, offline app-shell via a service worker.
 
 ## 1. Supabase setup (once)
