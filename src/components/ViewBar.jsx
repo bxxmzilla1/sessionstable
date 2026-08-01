@@ -14,8 +14,8 @@ function Popover({ children, onClose, className }) {
   return <div className={'popover ' + (className || '')} ref={ref}>{children}</div>
 }
 
-export default function ViewBar({ table, view, api, search, onSearch }) {
-  const [open, setOpen] = useState(null) // 'views' | 'sort' | 'filter' | 'hide' | 'group'
+export default function ViewBar({ table, view, api, search, onSearch, sidebarOpen, onToggleSidebar }) {
+  const [open, setOpen] = useState(null) // 'sort' | 'filter' | 'hide' | 'group'
   const toggle = (k) => setOpen((o) => (o === k ? null : k))
   const close = () => setOpen(null)
 
@@ -25,33 +25,8 @@ export default function ViewBar({ table, view, api, search, onSearch }) {
   return (
     <div className="viewbar">
       <div className="vb-left">
-        <div className="vb-menu">
-          <button className="vb-btn strong" onClick={() => toggle('views')}>
-            <span className="vicon">{VIEW_ICON[view.type]}</span>{view.name}<span className="caret">▾</span>
-          </button>
-          {open === 'views' && (
-            <Popover onClose={close} className="views-pop">
-              {table.views.map((v) => (
-                <div key={v.id} className={'view-row' + (v.id === table.activeViewId ? ' on' : '')}>
-                  <button className="view-pick" onClick={() => { api.setActiveView(table.id, v.id); close() }}>
-                    <span className="vicon">{VIEW_ICON[v.type]}</span>{v.name}
-                  </button>
-                  {table.views.length > 1 && (
-                    <button className="view-del" title="Delete view" onClick={() => api.deleteView(table.id, v.id)}>×</button>
-                  )}
-                </div>
-              ))}
-              <div className="views-add">
-                <div className="pop-label">Add view</div>
-                {['grid', 'kanban', 'gallery'].map((t) => (
-                  <button key={t} className="view-add-btn" onClick={() => { api.addView(table.id, t); close() }}>
-                    <span className="vicon">{VIEW_ICON[t]}</span>{t[0].toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </Popover>
-          )}
-        </div>
+        <button className={'vb-toggle' + (sidebarOpen ? ' on' : '')} onClick={onToggleSidebar} title="Toggle views panel">☰</button>
+        <span className="vb-viewname"><span className="vicon">{VIEW_ICON[view.type]}</span>{view.name}</span>
       </div>
 
       <div className="vb-right">

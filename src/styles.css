@@ -112,8 +112,41 @@ body {
 .filter-x { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; }
 .filter-x:hover { color: var(--error); }
 
-/* Workspace */
-.workspace { flex: 1; overflow: auto; }
+/* Body: view sidebar + workspace */
+.body { flex: 1; display: flex; min-height: 0; }
+.workspace { flex: 1; overflow: auto; min-width: 0; }
+
+/* View sidebar */
+.view-sidebar { flex: 0 0 240px; width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.vs-create { position: relative; padding: 12px 12px 6px; }
+.vs-create-btn { width: 100%; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--accent-strong); background: var(--accent-softer); border: 1px solid var(--border2); border-radius: 9px; padding: 9px 12px; text-align: left; }
+.vs-create-btn:hover { background: var(--accent-soft); border-color: var(--accent-light); }
+.vs-create-menu { position: absolute; top: calc(100% - 2px); left: 12px; right: 12px; z-index: 30; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 6px; }
+.vs-create-menu button { display: flex; align-items: center; gap: 8px; width: 100%; font: inherit; font-size: 13px; text-align: left; background: transparent; border: none; border-radius: 8px; padding: 8px 10px; cursor: pointer; color: var(--text); }
+.vs-create-menu button:hover { background: var(--surface3); }
+.vs-search { display: flex; align-items: center; gap: 6px; margin: 4px 12px 8px; padding: 0 10px; border: 1px solid var(--border2); border-radius: 8px; background: var(--surface2); }
+.vs-search-ic { color: var(--muted); font-size: 14px; }
+.vs-search input { flex: 1; font: inherit; font-size: 13px; padding: 8px 0; border: none; background: transparent; outline: none; }
+.vs-list { flex: 1; overflow: auto; padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 1px; }
+.vs-item { display: flex; align-items: center; border-radius: 8px; }
+.vs-item:hover { background: var(--surface3); }
+.vs-item.on { background: var(--accent-soft); }
+.vs-pick { flex: 1; display: flex; align-items: center; gap: 9px; font: inherit; font-size: 13px; text-align: left; background: transparent; border: none; border-radius: 8px; padding: 8px 10px; cursor: pointer; color: var(--text); overflow: hidden; }
+.vs-item.on .vs-pick { color: var(--accent-strong); font-weight: 600; }
+.vs-pick .vicon { color: var(--accent); flex-shrink: 0; }
+.vs-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-edit { flex: 1; font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--accent-light); border-radius: 8px; box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.vs-del { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 8px; opacity: 0; }
+.vs-item:hover .vs-del { opacity: 1; }
+.vs-del:hover { color: var(--error); }
+.vs-empty { font-size: 12.5px; color: var(--muted); padding: 10px; }
+
+/* View bar toggle + static name */
+.vb-toggle { font: inherit; font-size: 15px; cursor: pointer; background: transparent; border: 1px solid transparent; color: var(--text2); border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
+.vb-toggle:hover { background: var(--surface3); color: var(--text); }
+.vb-toggle.on { color: var(--accent-strong); }
+.vb-viewname { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: var(--text); }
+.vb-viewname .vicon { color: var(--accent); }
 
 /* Grid view */
 .grid-view { min-height: 100%; }

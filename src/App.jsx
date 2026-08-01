@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import Auth from './components/Auth'
 import TableTabs from './components/TableTabs'
 import ViewBar from './components/ViewBar'
+import ViewSidebar from './components/ViewSidebar'
 import GridView from './components/GridView'
 import KanbanView from './components/KanbanView'
 import GalleryView from './components/GalleryView'
@@ -67,6 +68,7 @@ export default function App() {
   const [status, setStatus] = useState('idle')
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const saveTimer = useRef(null)
   const loadedFor = useRef(null)
 
@@ -234,12 +236,16 @@ export default function App() {
       </header>
 
       <TableTabs base={base} api={api} />
-      <ViewBar table={table} view={view} api={api} search={search} onSearch={setSearch} />
+      <ViewBar table={table} view={view} api={api} search={search} onSearch={setSearch}
+        sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((s) => !s)} />
 
-      <div className="workspace">
-        {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
-        {view.type === 'kanban' && <KanbanView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
-        {view.type === 'gallery' && <GalleryView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+      <div className="body">
+        {sidebarOpen && <ViewSidebar table={table} api={api} />}
+        <div className="workspace">
+          {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+          {view.type === 'kanban' && <KanbanView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+          {view.type === 'gallery' && <GalleryView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+        </div>
       </div>
 
       {expanded && (
