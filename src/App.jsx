@@ -91,9 +91,24 @@ export default function App() {
       const { data, error } = await supabase.from('sheets').select('data, updated_at').eq('user_id', session.user.id).maybeSingle()
       if (error) { console.error(error); setStore(normalizeStore(null)); return }
       lastRemoteStamp.current = data?.updated_at || null
-      setStore(normalizeStore(data?.data || null))
-      setActiveWorkspaceId(null) // always land on Home
+      const normalized = normalizeStore(data?.data || null)
+      setStore(normalized)
+      // Land back in the workspace that was open before the refresh (until manually exited).
+      let saved = null
+      try { saved = localStorage.getItem('st_ws_' + session.user.id) } catch (e) {}
+      setActiveWorkspaceId(saved && normalized.workspaces.some((w) => w.id === saved) ? saved : null)
     })()
+  }, [session])
+
+  // Remember the open workspace across refreshes; cleared when the user exits to Home.
+  const setWorkspace = useCallback((id) => {
+    setActiveWorkspaceId(id)
+    try {
+      if (!session?.user) return
+      const key = 'st_ws_' + session.user.id
+      if (id) localStorage.setItem(key, id)
+      else localStorage.removeItem(key)
+    } catch (e) {}
   }, [session])
 
   // Live-sync: the Sessions 4 desktop app writes rows into this same document (connected
@@ -158,20 +173,20 @@ export default function App() {
   const openWorkspace = useCallback((id) => {
     setSearch('')
     setExpandedId(null)
-    setActiveWorkspaceId(id)
+    setWorkspace(id)
     update((s) => ({
       ...s,
       workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, openedAt: new Date().toISOString() } : w)),
     }))
-  }, [update])
+  }, [update, setWorkspace])
 
   const createWorkspace = useCallback(() => {
     const ws = newWorkspace('Untitled Workspace')
     update((s) => ({ ...s, workspaces: [...s.workspaces, ws] }))
-    setActiveWorkspaceId(ws.id)
+    setWorkspace(ws.id)
     setSearch('')
     setExpandedId(null)
-  }, [update])
+  }, [update, setWorkspace])
 
   const renameWorkspace = useCallback((id, name) => {
     update((s) => ({
@@ -185,8 +200,8 @@ export default function App() {
       const workspaces = s.workspaces.filter((w) => w.id !== id)
       return { ...s, workspaces }
     })
-    if (activeWorkspaceId === id) setActiveWorkspaceId(null)
-  }, [update, activeWorkspaceId])
+    if (activeWorkspaceId === id) setWorkspace(null)
+  }, [update, activeWorkspaceId, setWorkspace])
 
   const api = useMemo(() => ({
     addTable() {
@@ -308,7 +323,7 @@ export default function App() {
   if (!workspace) {
     return (
       <div className="center muted">
-        Workspace not found. <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => setActiveWorkspaceId(null)}>Back to Home</button>
+        Workspace not found. <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => setWorkspace(null)}>Back to Home</button>
       </div>
     )
   }
@@ -324,7 +339,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <button className="home-back" onClick={() => setActiveWorkspaceId(null)} title="Back to Home">← Home</button>
+        <button className="home-back" onClick={() => setWorkspace(null)} title="Back to Home">← Home</button>
         <div className="brand ws-brand">
           <span className="logo" aria-hidden="true">▦</span>
           <span className="ws-top-name" title={workspace.name}>{workspace.name}</span>
