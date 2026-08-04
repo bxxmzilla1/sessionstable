@@ -130,7 +130,7 @@ export default function App() {
         setStore(normalizeStore(full.data || null))
       } catch (e) { console.error(e) }
     }
-    const id = setInterval(tick, 3000)
+    const id = setInterval(tick, 1000)
     return () => { stopped = true; clearInterval(id) }
   }, [session])
 
