@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './components/Auth'
+import Home from './components/Home'
 import TableTabs from './components/TableTabs'
 import ViewBar from './components/ViewBar'
 import ViewSidebar from './components/ViewSidebar'
@@ -8,7 +9,10 @@ import GridView from './components/GridView'
 import KanbanView from './components/KanbanView'
 import GalleryView from './components/GalleryView'
 import RecordModal from './components/RecordModal'
-import { defaultBase, displayValue, newField, newRecord, newView, uid } from './base'
+import {
+  displayValue, emptyTable, newField, newRecord, newView, newWorkspace,
+  normalizeStore, uid,
+} from './base'
 import { OPTION_PALETTE } from './constants'
 
 function matchFilter(field, value, op, target) {
@@ -36,16 +40,13 @@ function matchFilter(field, value, op, target) {
 function processRecords(table, view, search) {
   const byId = (id) => table.fields.find((f) => f.id === id)
   let recs = table.records
-
   for (const flt of view.filters || []) {
     const f = byId(flt.field)
     if (!f) continue
     recs = recs.filter((r) => matchFilter(f, r.cells[f.id], flt.op, flt.value))
   }
-
   const q = search.trim().toLowerCase()
   if (q) recs = recs.filter((r) => table.fields.some((f) => displayValue(f, r.cells[f.id]).toLowerCase().includes(q)))
-
   if (view.sort) {
     const f = byId(view.sort.field)
     if (f) {
@@ -64,7 +65,8 @@ function processRecords(table, view, search) {
 export default function App() {
   const [session, setSession] = useState(null)
   const [ready, setReady] = useState(false)
-  const [base, setBase] = useState(null)
+  const [store, setStore] = useState(null)
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
   const [status, setStatus] = useState('idle')
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
@@ -79,13 +81,14 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!session?.user) { setBase(null); loadedFor.current = null; return }
+    if (!session?.user) { setStore(null); setActiveWorkspaceId(null); loadedFor.current = null; return }
     if (loadedFor.current === session.user.id) return
     loadedFor.current = session.user.id
     ;(async () => {
       const { data, error } = await supabase.from('sheets').select('data').eq('user_id', session.user.id).maybeSingle()
-      if (error) { console.error(error); setBase(defaultBase()); return }
-      setBase(data?.data?.tables ? data.data : defaultBase())
+      if (error) { console.error(error); setStore(normalizeStore(null)); return }
+      setStore(normalizeStore(data?.data || null))
+      setActiveWorkspaceId(null) // always land on Home
     })()
   }, [session])
 
@@ -104,35 +107,75 @@ export default function App() {
   }, [session])
 
   const update = useCallback((mutator) => {
-    setBase((prev) => { const next = mutator(prev); scheduleSave(next); return next })
+    setStore((prev) => { const next = mutator(prev); scheduleSave(next); return next })
   }, [scheduleSave])
 
+  const mutateWorkspace = useCallback((fn) => {
+    if (!activeWorkspaceId) return
+    update((s) => ({
+      ...s,
+      workspaces: s.workspaces.map((w) => (w.id === activeWorkspaceId ? fn(w) : w)),
+    }))
+  }, [update, activeWorkspaceId])
+
   const mutateTable = useCallback((tableId, fn) => {
-    update((b) => ({ ...b, tables: b.tables.map((t) => (t.id === tableId ? fn(t) : t)) }))
+    mutateWorkspace((w) => ({
+      ...w,
+      tables: w.tables.map((t) => (t.id === tableId ? fn(t) : t)),
+    }))
+  }, [mutateWorkspace])
+
+  const openWorkspace = useCallback((id) => {
+    setSearch('')
+    setExpandedId(null)
+    setActiveWorkspaceId(id)
+    update((s) => ({
+      ...s,
+      workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, openedAt: new Date().toISOString() } : w)),
+    }))
   }, [update])
 
+  const createWorkspace = useCallback(() => {
+    const ws = newWorkspace('Untitled Workspace')
+    update((s) => ({ ...s, workspaces: [...s.workspaces, ws] }))
+    setActiveWorkspaceId(ws.id)
+    setSearch('')
+    setExpandedId(null)
+  }, [update])
+
+  const renameWorkspace = useCallback((id, name) => {
+    update((s) => ({
+      ...s,
+      workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name: (name || '').trim() || w.name } : w)),
+    }))
+  }, [update])
+
+  const deleteWorkspace = useCallback((id) => {
+    update((s) => {
+      const workspaces = s.workspaces.filter((w) => w.id !== id)
+      return { ...s, workspaces }
+    })
+    if (activeWorkspaceId === id) setActiveWorkspaceId(null)
+  }, [update, activeWorkspaceId])
+
   const api = useMemo(() => ({
-    // Tables
     addTable() {
-      update((b) => {
-        const name = newField('Name', 'text')
-        const notes = newField('Notes', 'longText')
-        const grid = newView('Grid', 'grid')
-        const t = { id: uid('tbl'), name: 'Table ' + (b.tables.length + 1), fields: [name, notes], records: [newRecord(), newRecord()], views: [grid], activeViewId: grid.id, primaryFieldId: name.id }
-        return { ...b, tables: [...b.tables, t], activeTableId: t.id }
+      mutateWorkspace((w) => {
+        const t = emptyTable('Table ' + (w.tables.length + 1))
+        // emptyTable already has Name/Notes — rename for clarity
+        return { ...w, tables: [...w.tables, t], activeTableId: t.id }
       })
     },
     renameTable(id, name) { mutateTable(id, (t) => ({ ...t, name: (name || '').trim() || t.name })) },
     deleteTable(id) {
-      update((b) => {
-        if (b.tables.length <= 1) return b
-        const tables = b.tables.filter((t) => t.id !== id)
-        return { ...b, tables, activeTableId: b.activeTableId === id ? tables[0].id : b.activeTableId }
+      mutateWorkspace((w) => {
+        if (w.tables.length <= 1) return w
+        const tables = w.tables.filter((t) => t.id !== id)
+        return { ...w, tables, activeTableId: w.activeTableId === id ? tables[0].id : w.activeTableId }
       })
     },
-    setActiveTable(id) { update((b) => ({ ...b, activeTableId: id })) },
+    setActiveTable(id) { mutateWorkspace((w) => ({ ...w, activeTableId: id })) },
 
-    // Views
     addView(tableId, type) {
       mutateTable(tableId, (t) => {
         const count = t.views.filter((v) => v.type === type).length
@@ -162,7 +205,6 @@ export default function App() {
       mutateTable(tableId, (t) => ({ ...t, views: t.views.map((v) => (v.id === viewId ? { ...v, filters: v.filters.filter((f) => f.id !== filterId) } : v)) }))
     },
 
-    // Fields
     addField(tableId, patch) {
       mutateTable(tableId, (t) => ({ ...t, fields: [...t.fields, newField(patch.name, patch.type, patch.options ? { options: patch.options } : {})] }))
     },
@@ -206,27 +248,57 @@ export default function App() {
       return id
     },
 
-    // Records
     addRecord(tableId, preset = {}) { mutateTable(tableId, (t) => ({ ...t, records: [...t.records, newRecord({ ...preset })] })) },
     updateCell(tableId, recordId, fieldId, value) {
       mutateTable(tableId, (t) => ({ ...t, records: t.records.map((r) => (r.id === recordId ? { ...r, cells: { ...r.cells, [fieldId]: value } } : r)) }))
     },
     deleteRecord(tableId, recordId) { mutateTable(tableId, (t) => ({ ...t, records: t.records.filter((r) => r.id !== recordId) })) },
-  }), [update, mutateTable])
+  }), [mutateWorkspace, mutateTable])
 
   if (!ready) return <div className="center muted">Loading…</div>
   if (!session) return <Auth />
-  if (!base) return <div className="center muted">Opening your base…</div>
+  if (!store) return <div className="center muted">Opening your workspaces…</div>
 
-  const table = base.tables.find((t) => t.id === base.activeTableId) || base.tables[0]
+  // ── Home ──
+  if (!activeWorkspaceId) {
+    return (
+      <div className="app">
+        <Home
+          store={store}
+          onOpen={openWorkspace}
+          onCreate={createWorkspace}
+          onRename={renameWorkspace}
+          onDelete={deleteWorkspace}
+        />
+      </div>
+    )
+  }
+
+  const workspace = store.workspaces.find((w) => w.id === activeWorkspaceId)
+  if (!workspace) {
+    return (
+      <div className="center muted">
+        Workspace not found. <button className="btn ghost sm" style={{ marginLeft: 8 }} onClick={() => setActiveWorkspaceId(null)}>Back to Home</button>
+      </div>
+    )
+  }
+
+  const table = workspace.tables.find((t) => t.id === workspace.activeTableId) || workspace.tables[0]
   const view = table.views.find((v) => v.id === table.activeViewId) || table.views[0]
   const records = processRecords(table, view, search)
   const expanded = expandedId ? table.records.find((r) => r.id === expandedId) : null
 
+  // TableTabs expects `{ tables, activeTableId }` — the workspace itself matches that shape.
+  const base = workspace
+
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand"><span className="logo" aria-hidden="true">▦</span> Sessions Table</div>
+        <button className="home-back" onClick={() => setActiveWorkspaceId(null)} title="Back to Home">← Home</button>
+        <div className="brand ws-brand">
+          <span className="logo" aria-hidden="true">▦</span>
+          <span className="ws-top-name" title={workspace.name}>{workspace.name}</span>
+        </div>
         <div className="grow" />
         <span className={'save ' + status}>
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}

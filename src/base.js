@@ -2,6 +2,17 @@ import { SELECT_TYPES } from './constants'
 
 export const uid = (p = 'id') => p + '_' + Math.random().toString(36).slice(2, 10)
 
+export const WORKSPACE_COLORS = [
+  { bg: '#ede9fe', accent: '#7c3aed' },
+  { bg: '#dbeafe', accent: '#2563eb' },
+  { bg: '#dcfce7', accent: '#16a34a' },
+  { bg: '#fef9c3', accent: '#ca8a04' },
+  { bg: '#ffedd5', accent: '#ea580c' },
+  { bg: '#fee2e2', accent: '#e11d48' },
+  { bg: '#fce7f3', accent: '#db2777' },
+  { bg: '#cffafe', accent: '#0891b2' },
+]
+
 export function newField(name, type, extra = {}) {
   const f = { id: uid('fld'), name, type, ...extra }
   if (SELECT_TYPES.includes(type) && !f.options) f.options = []
@@ -17,15 +28,31 @@ export function newView(name, type) {
     id: uid('viw'),
     name,
     type, // 'grid' | 'kanban' | 'gallery'
-    sort: null, // { field, dir: 'asc' | 'desc' }
-    filters: [], // [{ id, field, op, value }]
-    hidden: [], // fieldIds hidden in this view
-    groupField: null, // singleSelect fieldId for kanban stacks
+    sort: null,
+    filters: [],
+    hidden: [],
+    groupField: null,
   }
 }
 
-// A friendly starter base so a new account isn't staring at a blank screen.
-export function defaultBase() {
+/** Empty table used inside a new workspace. */
+export function emptyTable(name = 'Table 1') {
+  const nameField = newField('Name', 'text')
+  const notes = newField('Notes', 'longText')
+  const grid = newView('Grid', 'grid')
+  return {
+    id: uid('tbl'),
+    name,
+    fields: [nameField, notes],
+    records: [newRecord(), newRecord()],
+    views: [grid],
+    activeViewId: grid.id,
+    primaryFieldId: nameField.id,
+  }
+}
+
+/** Starter tables (Tasks sample) for the first / demo workspace. */
+export function starterTables() {
   const status = newField('Status', 'singleSelect', {
     options: [
       { id: uid('opt'), name: 'Todo', color: 5 },
@@ -45,7 +72,6 @@ export function defaultBase() {
   const done = newField('Done', 'checkbox')
   const priority = newField('Priority', 'rating')
   const due = newField('Due', 'date')
-
   const fields = [name, status, tags, priority, due, done, notes]
 
   const mk = (n, st, tg, pr, dt, dn, nt) =>
@@ -70,7 +96,7 @@ export function defaultBase() {
   kanban.groupField = status.id
   const gallery = newView('Gallery', 'gallery')
 
-  const table = {
+  return [{
     id: uid('tbl'),
     name: 'Tasks',
     fields,
@@ -78,9 +104,59 @@ export function defaultBase() {
     views: [grid, kanban, gallery],
     activeViewId: grid.id,
     primaryFieldId: name.id,
-  }
+  }]
+}
 
-  return { tables: [table], activeTableId: table.id }
+export function newWorkspace(name, { starter = false, color } = {}) {
+  const tables = starter ? starterTables() : [emptyTable()]
+  return {
+    id: uid('ws'),
+    name: name || 'Untitled Workspace',
+    color: color ?? Math.floor(Math.random() * WORKSPACE_COLORS.length),
+    openedAt: new Date().toISOString(),
+    tables,
+    activeTableId: tables[0].id,
+  }
+}
+
+export function defaultStore() {
+  const ws = newWorkspace('My Workspace', { starter: true, color: 0 })
+  return { workspaces: [ws] }
+}
+
+/** Accept legacy single-base `{ tables }` or the new `{ workspaces }` shape. */
+export function normalizeStore(data) {
+  if (data && Array.isArray(data.workspaces) && data.workspaces.length) {
+    return {
+      workspaces: data.workspaces.map((w) => ({
+        id: w.id || uid('ws'),
+        name: w.name || 'Untitled Workspace',
+        color: typeof w.color === 'number' ? w.color : 0,
+        openedAt: w.openedAt || new Date().toISOString(),
+        tables: Array.isArray(w.tables) && w.tables.length ? w.tables : [emptyTable()],
+        activeTableId: w.activeTableId || (w.tables && w.tables[0] && w.tables[0].id) || null,
+      })),
+    }
+  }
+  if (data && Array.isArray(data.tables) && data.tables.length) {
+    return {
+      workspaces: [{
+        id: uid('ws'),
+        name: 'Untitled Workspace',
+        color: 0,
+        openedAt: new Date().toISOString(),
+        tables: data.tables,
+        activeTableId: data.activeTableId || data.tables[0].id,
+      }],
+    }
+  }
+  return defaultStore()
+}
+
+// Back-compat alias used by older imports
+export function defaultBase() {
+  const tables = starterTables()
+  return { tables, activeTableId: tables[0].id }
 }
 
 export function displayValue(field, value) {
@@ -109,4 +185,20 @@ export function emptyValueFor(type) {
   if (type === 'rating') return 0
   if (type === 'singleSelect') return null
   return ''
+}
+
+export function formatOpened(iso) {
+  if (!iso) return 'Never opened'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return 'Never opened'
+  const diff = Date.now() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Opened just now'
+  if (mins < 60) return `Opened ${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `Opened ${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return 'Opened yesterday'
+  if (days < 7) return `Opened ${days}d ago`
+  return `Opened ${d.toLocaleDateString()}`
 }

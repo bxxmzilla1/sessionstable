@@ -8,8 +8,9 @@ purple accent, installable.
 ## Features
 
 - **Shared login** — same Supabase project as Sessions 4, so the same email/password works.
-- **One base per account** — data is stored per user in Supabase and protected by Row Level Security.
-- **Tables** — multiple tables per account; add, rename (double-click a tab), delete.
+- **Workspaces** — Airtable-style Home with multiple workspaces; click one to open its full sheet (tables, views, records).
+- **One store per account** — all workspaces are stored per user in Supabase and protected by Row Level Security.
+- **Tables** — multiple tables per workspace; add, rename (double-click a tab), delete.
 - **Typed fields** — single line text, long text, number, checkbox, single/multiple select,
   date, email, URL, phone, and rating. Add, rename, re-type, hide, or delete fields.
 - **Select options with colors** — Airtable-style colored tags, create options on the fly.
