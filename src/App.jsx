@@ -73,6 +73,9 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const saveTimer = useRef(null)
   const loadedFor = useRef(null)
+  const lastRemoteStamp = useRef(null) // updated_at of the last version we loaded or saved
+  const statusRef = useRef('idle')
+  useEffect(() => { statusRef.current = status }, [status])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true) })
@@ -85,11 +88,35 @@ export default function App() {
     if (loadedFor.current === session.user.id) return
     loadedFor.current = session.user.id
     ;(async () => {
-      const { data, error } = await supabase.from('sheets').select('data').eq('user_id', session.user.id).maybeSingle()
+      const { data, error } = await supabase.from('sheets').select('data, updated_at').eq('user_id', session.user.id).maybeSingle()
       if (error) { console.error(error); setStore(normalizeStore(null)); return }
+      lastRemoteStamp.current = data?.updated_at || null
       setStore(normalizeStore(data?.data || null))
       setActiveWorkspaceId(null) // always land on Home
     })()
+  }, [session])
+
+  // Live-sync: the Sessions 4 desktop app writes rows into this same document (connected
+  // containers, XPaste, XSave). Poll updated_at and pull the fresh document whenever someone
+  // else saved — skipped while local edits are still flushing so they aren't clobbered.
+  useEffect(() => {
+    if (!session?.user) return
+    let stopped = false
+    const tick = async () => {
+      if (stopped || statusRef.current === 'saving') return
+      try {
+        const { data } = await supabase.from('sheets').select('updated_at').eq('user_id', session.user.id).maybeSingle()
+        const stamp = data?.updated_at
+        if (!stamp || stamp === lastRemoteStamp.current) return
+        if (stopped || statusRef.current === 'saving') return
+        const { data: full } = await supabase.from('sheets').select('data, updated_at').eq('user_id', session.user.id).maybeSingle()
+        if (stopped || statusRef.current === 'saving' || !full?.updated_at) return
+        lastRemoteStamp.current = full.updated_at
+        setStore(normalizeStore(full.data || null))
+      } catch (e) { console.error(e) }
+    }
+    const id = setInterval(tick, 3000)
+    return () => { stopped = true; clearInterval(id) }
   }, [session])
 
   const scheduleSave = useCallback((next) => {
@@ -97,10 +124,13 @@ export default function App() {
     setStatus('saving')
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
+      const stamp = new Date().toISOString()
       const { error } = await supabase.from('sheets').upsert(
-        { user_id: session.user.id, data: next, updated_at: new Date().toISOString() },
+        { user_id: session.user.id, data: next, updated_at: stamp },
         { onConflict: 'user_id' }
       )
+      // Remember our own save so the live-sync poll doesn't treat it as a remote change.
+      if (!error) lastRemoteStamp.current = stamp
       setStatus(error ? 'error' : 'saved')
       if (error) console.error(error)
     }, 600)
