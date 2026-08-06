@@ -286,6 +286,29 @@ body {
 .cell-rating .star { border: none; background: transparent; cursor: pointer; font-size: 15px; color: #dcd7ea; line-height: 1; }
 .cell-rating .star.on { color: #f5b301; }
 
+/* 2FA (TOTP) cell: secret input/code on the left, transform button + countdown ring on the right */
+.cell-2fa { display: flex; align-items: center; height: 40px; gap: 4px; padding-right: 6px; }
+.cell-2fa .cell-input { flex: 1; min-width: 0; }
+.cell-2fa .totp-code {
+  flex: 1; min-width: 0; padding: 0 10px; font-size: 15px; font-weight: 700; letter-spacing: .16em;
+  color: var(--accent-strong); cursor: pointer; font-variant-numeric: tabular-nums; user-select: all;
+}
+.totp-btn {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center;
+  justify-content: center; border: 1px solid var(--border2); background: var(--surface2);
+  cursor: pointer; font-size: 13px; line-height: 1; color: var(--accent-strong); transition: all .12s;
+}
+.totp-btn:hover:not(:disabled) { border-color: var(--accent-light); background: var(--accent-softer); }
+.totp-btn:disabled { opacity: .35; cursor: default; }
+.totp-btn.on { border-color: var(--accent-light); background: var(--accent-soft); }
+/* Countdown: conic-gradient ring drains as the 30s window elapses, seconds shown in the middle */
+.totp-ring { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.totp-secs {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--surface); display: flex;
+  align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--text2);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Selects + tags */
 .cell-select { position: relative; height: 40px; }
 .select-trigger { width: 100%; height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: transparent; border: none; cursor: pointer; font: inherit; }

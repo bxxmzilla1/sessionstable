@@ -1,5 +1,76 @@
 import { useEffect, useRef, useState } from 'react'
 import { OPTION_PALETTE } from '../constants'
+import { totp, isValidSecret, secondsRemaining, TOTP_STEP } from '../totp'
+
+// A "2FA" column: the cell holds the base32 secret, and a button on the right transforms it into
+// the live 6-digit code with a countdown ring showing when it rolls over. Clicking the code (or the
+// button while revealed) copies it. It re-computes every second and refreshes on each 30s boundary.
+export function isTwoFactorField(field) {
+  return String(field?.name || '').trim().toLowerCase() === '2fa'
+}
+
+function TotpCell({ value, onChange }) {
+  const [reveal, setReveal] = useState(false)
+  const [code, setCode] = useState('')
+  const [remaining, setRemaining] = useState(TOTP_STEP)
+  const valid = isValidSecret(value)
+
+  useEffect(() => {
+    if (!reveal || !valid) return
+    let alive = true
+    const tick = async () => {
+      const c = await totp(value)
+      if (!alive) return
+      setCode(c)
+      setRemaining(secondsRemaining())
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => { alive = false; clearInterval(id) }
+  }, [reveal, valid, value])
+
+  // A stale secret (edited to something invalid) can't stay revealed.
+  useEffect(() => { if (reveal && !valid) setReveal(false) }, [reveal, valid])
+
+  const copy = (text) => { navigator.clipboard?.writeText(text).catch(() => {}) }
+
+  async function onBtn() {
+    if (!valid) return
+    if (reveal) { setReveal(false); return }
+    const c = await totp(value)
+    setCode(c)
+    setRemaining(secondsRemaining())
+    setReveal(true)
+    copy(c)
+  }
+
+  const pct = Math.round((remaining / TOTP_STEP) * 100)
+  const ring = { background: `conic-gradient(var(--accent) ${pct}%, var(--border2) 0)` }
+
+  return (
+    <div className="cell-2fa">
+      {reveal && valid ? (
+        <span className="totp-code" title="Click to copy" onClick={() => copy(code)}>{code}</span>
+      ) : (
+        <input
+          className="cell-input" value={value || ''} placeholder="2FA secret key"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+      <button
+        type="button"
+        className={'totp-btn' + (reveal ? ' on' : '')}
+        onClick={onBtn}
+        disabled={!valid}
+        title={valid ? (reveal ? `Rotates in ${remaining}s — click to hide` : 'Show 2FA code') : 'Enter a valid 2FA secret key'}
+      >
+        {reveal ? (
+          <span className="totp-ring" style={ring}><span className="totp-secs">{remaining}</span></span>
+        ) : '🔑'}
+      </button>
+    </div>
+  )
+}
 
 function Tag({ option, onRemove }) {
   const c = OPTION_PALETTE[option.color % OPTION_PALETTE.length]
@@ -61,6 +132,11 @@ function SelectPopover({ field, value, multi, onChange, onAddOption, onClose }) 
 
 export default function Cell({ field, value, onChange, onAddOption, expanded = false }) {
   const [selOpen, setSelOpen] = useState(false)
+
+  // A text-like column named "2FA" becomes a live authenticator cell regardless of its exact type.
+  if (isTwoFactorField(field) && ['text', 'longText', 'email', 'url', 'phone'].includes(field.type)) {
+    return <TotpCell value={value} onChange={onChange} />
+  }
 
   switch (field.type) {
     case 'checkbox':
