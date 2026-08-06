@@ -252,8 +252,8 @@ body {
 .atable thead th { position: sticky; top: 0; z-index: 5; background: var(--surface2); height: 38px; font-size: 12px; font-weight: 600; color: var(--text2); }
 .atable .rownum { width: 92px; min-width: 92px; text-align: center; color: var(--muted); font-size: 12px; background: var(--surface2); position: sticky; left: 0; z-index: 4; }
 .atable tbody .rownum { padding: 6px 4px; }
-.launch-link-btn { display: block; margin: 6px auto 0; padding: 3px 8px; font-size: 10px; font-weight: 700; letter-spacing: .02em; border: 1px solid #16a34a; background: #16a34a; color: #fff; border-radius: 6px; cursor: pointer; line-height: 1.25; white-space: nowrap; }
-.launch-link-btn:hover { filter: brightness(1.08); }
+.launch-link-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: 6px auto 0; padding: 0; border: 1px solid var(--accent-strong); background: var(--accent); color: #fff; border-radius: 7px; cursor: pointer; }
+.launch-link-btn:hover { background: var(--accent-strong); }
 .atable thead .rownum { z-index: 6; }
 .atable tbody .rownum { position: relative; }
 .atable .rownum .rn { }
