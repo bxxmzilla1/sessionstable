@@ -195,13 +195,25 @@ export default function App() {
     }))
   }, [update])
 
+  // Deleting a row (or a table/workspace containing rows) that Sessions 4 saved also deletes the
+  // matching cloud launch links — the "vice versa" of Sessions 4 deleting the row when a launch
+  // link is removed. Idempotent, so a double-invoked updater in dev strict mode is harmless.
+  const deleteLaunchTokens = useCallback((tokens) => {
+    const list = [...new Set((tokens || []).filter(Boolean))]
+    if (!list.length || !session?.user) return
+    supabase.from('session_links').delete().eq('user_id', session.user.id).in('token', list)
+      .then(({ error }) => { if (error) console.error(error) })
+  }, [session])
+
   const deleteWorkspace = useCallback((id) => {
     update((s) => {
+      const gone = s.workspaces.find((w) => w.id === id)
+      if (gone) deleteLaunchTokens((gone.tables || []).flatMap((t) => (t.records || []).map((r) => r.launch?.token)))
       const workspaces = s.workspaces.filter((w) => w.id !== id)
       return { ...s, workspaces }
     })
     if (activeWorkspaceId === id) setWorkspace(null)
-  }, [update, activeWorkspaceId, setWorkspace])
+  }, [update, activeWorkspaceId, setWorkspace, deleteLaunchTokens])
 
   const api = useMemo(() => ({
     addTable() {
@@ -215,6 +227,8 @@ export default function App() {
     deleteTable(id) {
       mutateWorkspace((w) => {
         if (w.tables.length <= 1) return w
+        const gone = w.tables.find((t) => t.id === id)
+        if (gone) deleteLaunchTokens((gone.records || []).map((r) => r.launch?.token))
         const tables = w.tables.filter((t) => t.id !== id)
         return { ...w, tables, activeTableId: w.activeTableId === id ? tables[0].id : w.activeTableId }
       })
@@ -297,8 +311,14 @@ export default function App() {
     updateCell(tableId, recordId, fieldId, value) {
       mutateTable(tableId, (t) => ({ ...t, records: t.records.map((r) => (r.id === recordId ? { ...r, cells: { ...r.cells, [fieldId]: value } } : r)) }))
     },
-    deleteRecord(tableId, recordId) { mutateTable(tableId, (t) => ({ ...t, records: t.records.filter((r) => r.id !== recordId) })) },
-  }), [mutateWorkspace, mutateTable])
+    deleteRecord(tableId, recordId) {
+      mutateTable(tableId, (t) => {
+        const rec = t.records.find((r) => r.id === recordId)
+        if (rec?.launch?.token) deleteLaunchTokens([rec.launch.token])
+        return { ...t, records: t.records.filter((r) => r.id !== recordId) }
+      })
+    },
+  }), [mutateWorkspace, mutateTable, deleteLaunchTokens])
 
   if (!ready) return <div className="center muted">Loading…</div>
   if (!session) return <Auth />
