@@ -250,7 +250,10 @@ body {
 .atable { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .atable th, .atable td { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .atable thead th { position: sticky; top: 0; z-index: 5; background: var(--surface2); height: 38px; font-size: 12px; font-weight: 600; color: var(--text2); }
-.atable .rownum { width: 62px; min-width: 62px; text-align: center; color: var(--muted); font-size: 12px; background: var(--surface2); position: sticky; left: 0; z-index: 4; }
+.atable .rownum { width: 92px; min-width: 92px; text-align: center; color: var(--muted); font-size: 12px; background: var(--surface2); position: sticky; left: 0; z-index: 4; }
+.atable tbody .rownum { padding: 6px 4px; }
+.launch-link-btn { display: block; margin: 6px auto 0; padding: 3px 8px; font-size: 10px; font-weight: 700; letter-spacing: .02em; border: 1px solid #16a34a; background: #16a34a; color: #fff; border-radius: 6px; cursor: pointer; line-height: 1.25; white-space: nowrap; }
+.launch-link-btn:hover { filter: brightness(1.08); }
 .atable thead .rownum { z-index: 6; }
 .atable tbody .rownum { position: relative; }
 .atable .rownum .rn { }
@@ -290,9 +293,22 @@ body {
 .cell-2fa { display: flex; align-items: center; height: 40px; gap: 4px; padding-right: 6px; }
 .cell-2fa .cell-input { flex: 1; min-width: 0; }
 .cell-2fa .totp-code {
-  flex: 1; min-width: 0; padding: 0 10px; font-size: 15px; font-weight: 700; letter-spacing: .16em;
-  color: var(--accent-strong); cursor: pointer; font-variant-numeric: tabular-nums; user-select: all;
+  flex: 1; min-width: 0; height: 40px; padding: 0 10px; border: none; background: transparent;
+  display: flex; align-items: center; gap: 8px; cursor: pointer; font: inherit; text-align: left;
+  border-radius: 6px; transition: background .12s;
 }
+.cell-2fa .totp-code:hover { background: var(--accent-softer); }
+.totp-digits {
+  font-size: 15px; font-weight: 700; letter-spacing: .16em; color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+.totp-copied {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); opacity: 0; transition: opacity .12s;
+}
+.cell-2fa .totp-code:hover .totp-copied { opacity: 1; }
+.cell-2fa .totp-code.copied { background: rgba(22, 163, 74, .1); }
+.cell-2fa .totp-code.copied .totp-copied { opacity: 1; color: var(--ok); }
 .totp-btn {
   flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center;
   justify-content: center; border: 1px solid var(--border2); background: var(--surface2);

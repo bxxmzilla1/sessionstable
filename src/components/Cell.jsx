@@ -13,6 +13,8 @@ function TotpCell({ value, onChange }) {
   const [reveal, setReveal] = useState(false)
   const [code, setCode] = useState('')
   const [remaining, setRemaining] = useState(TOTP_STEP)
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef(null)
   const valid = isValidSecret(value)
 
   useEffect(() => {
@@ -31,8 +33,18 @@ function TotpCell({ value, onChange }) {
 
   // A stale secret (edited to something invalid) can't stay revealed.
   useEffect(() => { if (reveal && !valid) setReveal(false) }, [reveal, valid])
+  useEffect(() => () => clearTimeout(copiedTimer.current), [])
 
-  const copy = (text) => { navigator.clipboard?.writeText(text).catch(() => {}) }
+  // Copy to clipboard and flash a brief "Copied" confirmation so the click is obviously working.
+  const copy = async (text) => {
+    if (!text) return
+    try {
+      await navigator.clipboard?.writeText(text)
+      setCopied(true)
+      clearTimeout(copiedTimer.current)
+      copiedTimer.current = setTimeout(() => setCopied(false), 1100)
+    } catch { /* clipboard blocked — nothing to do */ }
+  }
 
   async function onBtn() {
     if (!valid) return
@@ -50,7 +62,15 @@ function TotpCell({ value, onChange }) {
   return (
     <div className="cell-2fa">
       {reveal && valid ? (
-        <span className="totp-code" title="Click to copy" onClick={() => copy(code)}>{code}</span>
+        <button
+          type="button"
+          className={'totp-code' + (copied ? ' copied' : '')}
+          title="Click to copy code"
+          onClick={() => copy(code)}
+        >
+          <span className="totp-digits">{code}</span>
+          <span className="totp-copied">{copied ? 'Copied' : 'Copy'}</span>
+        </button>
       ) : (
         <input
           className="cell-input" value={value || ''} placeholder="2FA secret key"

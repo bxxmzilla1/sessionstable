@@ -47,6 +47,15 @@ export default function GridView({ table, view, records, api, onExpand }) {
               <td className="rownum">
                 <span className="rn">{i + 1}</span>
                 <button className="expand" title="Expand record" onClick={() => onExpand(rec.id)}>⤢</button>
+                {rec.launch?.token && (
+                  <button
+                    className="launch-link-btn"
+                    title="Launch this container in Sessions 4"
+                    onClick={() => { window.location.href = `sessions://open/${encodeURIComponent(rec.launch.token)}` }}
+                  >
+                    Launch Link
+                  </button>
+                )}
               </td>
               {visibleFields.map((f) => (
                 <td key={f.id} className={'acell type-' + f.type}>
