@@ -256,10 +256,17 @@ body {
 .launch-link-btn:hover { background: var(--accent-strong); }
 .atable thead .rownum { z-index: 6; }
 .atable tbody .rownum { position: relative; }
-.atable .rownum .rn { }
-.atable .rownum .expand { display: none; position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 1px solid var(--border2); background: #fff; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; color: var(--accent-strong); font-size: 12px; }
-.atable tbody tr:hover .rownum .expand { display: inline-block; }
-.atable tbody tr:hover .rownum .rn { opacity: 0; }
+.atable tbody .rownum.selectable { cursor: pointer; }
+.atable tbody .rownum.selectable:hover { background: var(--surface3, #eceafd); }
+
+/* Row selection (click the number column) */
+.atable tbody tr.row-sel td { background: rgba(124, 108, 255, 0.10); }
+.atable tbody tr.row-sel .rownum { background: rgba(124, 108, 255, 0.22); color: var(--accent-strong); font-weight: 600; }
+
+/* Read-only cell display: click selects, double-click edits */
+.gcell { height: 40px; line-height: 40px; padding: 0 10px; font-size: 13px; color: var(--text); cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; border-radius: 2px; }
+.gcell.gcell-sel { box-shadow: inset 0 0 0 2px var(--accent); background: #fff; }
+.acell.type-number .gcell { text-align: right; }
 .fieldh { min-width: 180px; width: 180px; padding: 0; }
 .fieldh-btn { width: 100%; height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 10px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text2); background: transparent; border: none; cursor: pointer; }
 .fieldh-btn:hover { background: var(--surface3); }

@@ -83,6 +83,7 @@ export default function App() {
   const [flash, setFlash] = useState('')
   const vpnSeeded = useRef(false)
   const vpnSeenAt = useRef(null)
+  const gridClipboard = useRef(null) // in-app clipboard: survives switching tab sheets
   const saveTimer = useRef(null)
   const loadedFor = useRef(null)
   const lastRemoteStamp = useRef(null) // updated_at of the last version we loaded or saved
@@ -366,6 +367,45 @@ export default function App() {
         return { ...t, records: t.records.filter((r) => r.id !== recordId) }
       })
     },
+    // Paste a list into one column: overwrite rows from `startRecordId` downward in the
+    // visible order (`orderedIds`), then create fresh rows for any leftover values.
+    pasteFillDown(tableId, fieldId, startRecordId, values, orderedIds) {
+      if (!values || !values.length) return
+      mutateTable(tableId, (t) => {
+        const records = t.records.map((r) => ({ ...r, cells: { ...r.cells } }))
+        const byId = new Map(records.map((r) => [r.id, r]))
+        const startIdx = orderedIds.indexOf(startRecordId)
+        const targets = startIdx >= 0 ? orderedIds.slice(startIdx) : []
+        values.forEach((val, i) => {
+          if (i < targets.length) {
+            const rec = byId.get(targets[i])
+            if (rec) rec.cells[fieldId] = val
+          } else {
+            records.push(newRecord({ [fieldId]: val }))
+          }
+        })
+        return { ...t, records }
+      })
+    },
+    // Paste a copied row (keyed by column NAME) into this sheet — overwrite `targetRecordId`
+    // or append a new row. Column names missing here are created as text so nothing is lost.
+    pasteRow(tableId, targetRecordId, cellsByName) {
+      const entries = Object.entries(cellsByName || {}).filter(([n, v]) => n && v !== '' && v != null)
+      if (!entries.length) return
+      mutateTable(tableId, (t) => {
+        const fields = [...t.fields]
+        const cellObj = {}
+        for (const [name, value] of entries) {
+          let f = fields.find((x) => String(x.name || '').trim().toLowerCase() === String(name).trim().toLowerCase())
+          if (!f) { f = newField(name, 'text'); fields.push(f) }
+          cellObj[f.id] = value
+        }
+        const records = targetRecordId
+          ? t.records.map((r) => (r.id === targetRecordId ? { ...r, cells: { ...r.cells, ...cellObj } } : r))
+          : [...t.records, newRecord(cellObj)]
+        return { ...t, fields, records }
+      })
+    },
   }), [mutateWorkspace, mutateTable, deleteLaunchTokens])
 
   if (!ready) return <div className="center muted">Loading…</div>
@@ -467,7 +507,7 @@ export default function App() {
           />
         )}
         <div className="workspace">
-          {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} onExpand={setExpandedId} onVpnSend={(rid) => sendToVpn(table.id, rid)} />}
+          {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} clipboard={gridClipboard} onVpnSend={(rid) => sendToVpn(table.id, rid)} />}
           {view.type === 'kanban' && <KanbanView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
           {view.type === 'gallery' && <GalleryView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
         </div>
