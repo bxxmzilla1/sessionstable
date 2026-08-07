@@ -4,7 +4,7 @@ const VIEW_ICON = { grid: '▦', kanban: '▤', gallery: '▢' }
 
 // Left panel listing every view of the active table (Airtable-style), with
 // "Create new…" and a find-a-view search.
-export default function ViewSidebar({ table, api }) {
+export default function ViewSidebar({ table, api, onPick }) {
   const [q, setQ] = useState('')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -41,7 +41,7 @@ export default function ViewSidebar({ table, api }) {
                 onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
               />
             ) : (
-              <button className="vs-pick" onClick={() => api.setActiveView(table.id, v.id)} onDoubleClick={() => setEditing(v.id)} title="Double-click to rename">
+              <button className="vs-pick" onClick={() => { api.setActiveView(table.id, v.id); onPick?.() }} onDoubleClick={() => setEditing(v.id)} title="Double-click to rename">
                 <span className="vicon">{VIEW_ICON[v.type]}</span>
                 <span className="vs-name">{v.name}</span>
               </button>

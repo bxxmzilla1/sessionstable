@@ -11,6 +11,8 @@ function initials(name) {
 export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSettings }) {
   const [editing, setEditing] = useState(null)
   const [menu, setMenu] = useState(null)
+  // On phones the sidebar is a slide-in drawer; on desktop it's always visible.
+  const [sideOpen, setSideOpen] = useState(false)
 
   const sorted = [...store.workspaces].sort((a, b) => {
     const at = new Date(a.openedAt || 0).getTime()
@@ -20,10 +22,11 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSe
 
   return (
     <div className="home">
-      <aside className="home-side">
+      {sideOpen && <div className="home-scrim" onClick={() => setSideOpen(false)} />}
+      <aside className={'home-side' + (sideOpen ? ' open' : '')}>
         <div className="hs-brand"><span className="logo">▦</span> Sessions Table</div>
         <button className="hs-nav on">⌂ Home</button>
-        <button className="hs-nav" onClick={onSettings}>⚙ Settings</button>
+        <button className="hs-nav" onClick={() => { setSideOpen(false); onSettings() }}>⚙ Settings</button>
         <div className="hs-section">
           <div className="hs-section-head">
             <span>Workspaces</span>
@@ -46,6 +49,7 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSe
 
       <main className="home-main">
         <div className="home-head">
+          <button className="home-menu-btn" onClick={() => setSideOpen(true)} title="Menu">☰</button>
           <h1>Home</h1>
           <button className="btn primary sm" onClick={onCreate}>+ Create</button>
         </div>

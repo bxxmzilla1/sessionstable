@@ -72,7 +72,8 @@ export default function App() {
   const [status, setStatus] = useState('idle')
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // The views panel starts closed on phones — it overlays the grid there as a drawer.
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const saveTimer = useRef(null)
   const loadedFor = useRef(null)
@@ -388,8 +389,8 @@ export default function App() {
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}
         </span>
         <span className="email" title={session.user.email}>{session.user.email}</span>
-        <button className="btn ghost sm" onClick={() => setSettingsOpen(true)} title="Settings">⚙ Settings</button>
-        <button className="btn ghost sm" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button className="btn ghost sm" onClick={() => setSettingsOpen(true)} title="Settings">⚙<span className="hide-sm"> Settings</span></button>
+        <button className="btn ghost sm" onClick={() => supabase.auth.signOut()} title="Sign out">↩<span className="hide-sm"> Sign out</span></button>
       </header>
 
       <TableTabs base={base} api={api} />
@@ -397,7 +398,15 @@ export default function App() {
         sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((s) => !s)} />
 
       <div className="body">
-        {sidebarOpen && <ViewSidebar table={table} api={api} />}
+        {sidebarOpen && <div className="side-scrim" onClick={() => setSidebarOpen(false)} />}
+        {sidebarOpen && (
+          <ViewSidebar
+            table={table}
+            api={api}
+            // On phones the panel is an overlay — picking a view should reveal the grid again.
+            onPick={() => { if (window.innerWidth <= 768) setSidebarOpen(false) }}
+          />
+        )}
         <div className="workspace">
           {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
           {view.type === 'kanban' && <KanbanView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}

@@ -447,3 +447,87 @@ body {
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-thumb { background: #d8d1ee; border: 3px solid var(--bg); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-light); }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────────
+   Both sidebars become slide-in drawers with a scrim; chrome tightens up so the
+   content owns the screen. Desktop is untouched — these elements are inert there. */
+.home-menu-btn { display: none; }
+.home-scrim, .side-scrim { display: none; }
+
+@media (max-width: 768px) {
+  /* Topbar: just the essentials */
+  .topbar { height: 50px; gap: 8px; padding: 0 10px; }
+  .email { display: none; }
+  .save { min-width: 0; font-size: 11.5px; }
+  .hide-sm { display: none; }
+  .ws-top-name { max-width: 110px; }
+  .home-back { padding: 6px 8px; white-space: nowrap; }
+
+  /* Home: sidebar becomes a drawer behind a hamburger */
+  .home-menu-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; font-size: 17px; cursor: pointer; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border2); border-radius: 10px;
+  }
+  .home-scrim {
+    display: block; position: fixed; inset: 0; z-index: 85;
+    background: rgba(31, 26, 46, 0.4); animation: scrim-in .18s ease;
+  }
+  .home-side {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 90; width: min(280px, 84vw);
+    transform: translateX(-105%); transition: transform .22s ease;
+    box-shadow: 0 0 40px rgba(31, 26, 46, 0.25); border-right: none;
+  }
+  .home-side.open { transform: translateX(0); }
+  .home-main { padding: 18px 16px 40px; }
+  .home-head h1 { font-size: 22px; }
+  .home-sub { margin: 4px 0 18px; font-size: 13px; }
+  .ws-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .ws-card { padding: 14px; min-height: 128px; border-radius: 14px; }
+  .ws-icon { width: 40px; height: 40px; border-radius: 12px; font-size: 13px; }
+  .ws-title { font-size: 14px; }
+
+  /* Tab sheets: the views panel overlays the grid as a drawer (☰ in the view bar) */
+  .side-scrim {
+    display: block; position: fixed; inset: 0; z-index: 45;
+    background: rgba(31, 26, 46, 0.4); animation: scrim-in .18s ease;
+  }
+  .view-sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 50; width: min(270px, 82vw);
+    box-shadow: 0 0 40px rgba(31, 26, 46, 0.25); border-right: none;
+    animation: drawer-in .22s ease;
+  }
+
+  /* View bar: one scrollable strip, no wrapping */
+  .viewbar { gap: 4px; padding: 6px 8px; overflow-x: auto; scrollbar-width: none; }
+  .viewbar::-webkit-scrollbar { display: none; }
+  .vb-left, .vb-right { flex-shrink: 0; }
+  .vb-viewname { font-size: 13px; white-space: nowrap; }
+  .vb-btn { padding: 7px 8px; white-space: nowrap; }
+  .vb-search { width: 110px; flex-shrink: 0; }
+
+  /* Grid: tighter columns, comfy touch targets */
+  .table-tabs { padding: 0 8px; scrollbar-width: none; }
+  .table-tabs::-webkit-scrollbar { display: none; }
+  .fieldh { min-width: 150px; width: 150px; }
+  .atable .rownum { width: 64px; min-width: 64px; }
+  .filter-pop { min-width: min(330px, 86vw); }
+
+  /* Kanban + gallery scale down */
+  .kanban { gap: 10px; padding: 12px; }
+  .kstack { flex: 0 0 230px; }
+  .gallery { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; padding: 12px; }
+
+  /* Modals: use the whole screen width */
+  .modal-scrim { padding: 12px; }
+  .record-modal { max-height: 92dvh; }
+  .rm-field { grid-template-columns: 1fr; gap: 4px; }
+  .rm-field-label { padding-top: 0; }
+
+  /* Slimmer scrollbars */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-thumb { border: none; }
+}
+
+@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-in { from { transform: translateX(-105%); } to { transform: translateX(0); } }
