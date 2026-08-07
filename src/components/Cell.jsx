@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { OPTION_PALETTE } from '../constants'
 import { totp, isValidSecret, secondsRemaining, TOTP_STEP } from '../totp'
+import Icon from '../Icon'
 
 // A "2FA" column: the cell holds the base32 secret, and a button on the right transforms it into
 // the live 6-digit code with a countdown ring showing when it rolls over. Clicking the code (or the
@@ -98,7 +99,7 @@ function Tag({ option, onRemove }) {
     <span className="tag" style={{ background: c.bg, color: c.text }}>
       {option.name}
       {onRemove && (
-        <button className="tag-x" onMouseDown={(e) => { e.preventDefault(); onRemove() }}>×</button>
+        <button className="tag-x" onMouseDown={(e) => { e.preventDefault(); onRemove() }}><Icon name="close" size={12} /></button>
       )}
     </span>
   )
@@ -136,7 +137,7 @@ function SelectPopover({ field, value, multi, onChange, onAddOption, onClose }) 
         {filtered.map((o) => (
           <button key={o.id} className="select-item" onClick={() => toggle(o.id)}>
             <Tag option={o} />
-            {selected.includes(o.id) && <span className="check">✓</span>}
+            {selected.includes(o.id) && <span className="check"><Icon name="check" size={13} /></span>}
           </button>
         ))}
         {q.trim() && !exact && (
@@ -175,7 +176,7 @@ export default function Cell({ field, value, onChange, onAddOption, expanded = f
               className={'star' + (n <= (value || 0) ? ' on' : '')}
               onClick={() => onChange(n === value ? 0 : n)}
               title={n + ' / 5'}
-            >★</button>
+            ><Icon name="rating" size={15} fill={n <= (value || 0)} /></button>
           ))}
         </div>
       )

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FIELD_TYPES, OPTION_PALETTE, SELECT_TYPES } from '../constants'
 import { uid } from '../base'
+import Icon from '../Icon'
 
 // Popover to create a new field or edit an existing one (name, type, select options).
 export default function FieldMenu({ field, onSave, onDelete, onClose }) {
@@ -42,7 +43,7 @@ export default function FieldMenu({ field, onSave, onDelete, onClose }) {
       <div className="fm-types">
         {FIELD_TYPES.map((t) => (
           <button key={t.id} className={'fm-type' + (type === t.id ? ' on' : '')} onClick={() => setType(t.id)}>
-            <span className="fm-type-icon">{t.icon}</span>{t.name}
+            <span className="fm-type-icon"><Icon name={t.icon} size={12} /></span>{t.name}
           </button>
         ))}
       </div>
@@ -59,7 +60,7 @@ export default function FieldMenu({ field, onSave, onDelete, onClose }) {
                 ))}
               </div>
               <input className="fm-option-name" value={o.name} onChange={(e) => updateOption(o.id, { name: e.target.value })} />
-              <button className="fm-option-x" onClick={() => removeOption(o.id)}>×</button>
+              <button className="fm-option-x" onClick={() => removeOption(o.id)}><Icon name="close" size={13} /></button>
             </div>
           ))}
           <button className="fm-add-option" onClick={addOption}>+ Add option</button>

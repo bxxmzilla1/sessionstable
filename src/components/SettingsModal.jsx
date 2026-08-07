@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getBundleKey, setBundleKey } from '../bundle'
+import Icon from '../Icon'
 
 export default function SettingsModal({ onClose }) {
   const [key, setKey] = useState('')
@@ -31,7 +32,7 @@ export default function SettingsModal({ onClose }) {
       <div className="settings-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="sm-head">
           <div className="sm-title">Settings</div>
-          <button className="icon-btn" onClick={onClose} title="Close">×</button>
+          <button className="icon-btn" onClick={onClose} title="Close"><Icon name="close" size={18} /></button>
         </div>
         <div className="sm-body">
           <div className="sm-section">API keys</div>
@@ -59,7 +60,7 @@ export default function SettingsModal({ onClose }) {
         <div className="sm-foot">
           <div className="grow" />
           <button className="btn primary sm" onClick={save} disabled={state === 'loading' || state === 'saving'}>
-            {state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved ✓' : 'Save'}
+            {state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : 'Save'}
           </button>
         </div>
       </div>

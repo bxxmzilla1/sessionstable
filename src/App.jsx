@@ -10,6 +10,9 @@ import KanbanView from './components/KanbanView'
 import GalleryView from './components/GalleryView'
 import RecordModal from './components/RecordModal'
 import SettingsModal from './components/SettingsModal'
+import VpnScreen from './components/VpnScreen'
+import FooterNav from './components/FooterNav'
+import Icon from './Icon'
 import { deleteBundleTeams } from './bundle'
 import {
   displayValue, emptyTable, newField, newRecord, newView, newWorkspace,
@@ -75,6 +78,11 @@ export default function App() {
   // The views panel starts closed on phones — it overlays the grid there as a drawer.
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [vpnOpen, setVpnOpen] = useState(false)
+  const [vpnPreset, setVpnPreset] = useState(null)
+  const [flash, setFlash] = useState('')
+  const vpnSeeded = useRef(false)
+  const vpnSeenAt = useRef(null)
   const saveTimer = useRef(null)
   const loadedFor = useRef(null)
   const lastRemoteStamp = useRef(null) // updated_at of the last version we loaded or saved
@@ -198,6 +206,28 @@ export default function App() {
       workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name: (name || '').trim() || w.name } : w)),
     }))
   }, [update])
+
+  // Desktop "send to phone": stamp a VPN target into the synced document. The phone,
+  // already polling every second, opens its VPN screen pre-selected to this exact row.
+  const sendToVpn = useCallback((tableId, recordId) => {
+    update((s) => ({ ...s, vpnTarget: { wsId: activeWorkspaceId, tableId, recordId, at: Date.now() } }))
+    setFlash('Sent to VPN on your phone')
+    setTimeout(() => setFlash(''), 1800)
+  }, [update, activeWorkspaceId])
+
+  // Receiving end: when the synced vpnTarget changes, a phone jumps straight to the VPN
+  // screen with that row selected. Seeded on first load so a stale target never auto-opens.
+  useEffect(() => {
+    const at = store?.vpnTarget?.at || null
+    if (!vpnSeeded.current) { vpnSeeded.current = true; vpnSeenAt.current = at; return }
+    if (at && at !== vpnSeenAt.current) {
+      vpnSeenAt.current = at
+      if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+        setVpnPreset({ ...store.vpnTarget })
+        setVpnOpen(true)
+      }
+    }
+  }, [store])
 
   // Deleting a row (or a table/workspace containing rows) that Sessions 4 saved also deletes the
   // matching cloud launch links AND their bundle.social teams — the "vice versa" of Sessions 4
@@ -342,10 +372,38 @@ export default function App() {
   if (!session) return <Auth />
   if (!store) return <div className="center muted">Opening your workspaces…</div>
 
+  const footer = (
+    <FooterNav
+      active={vpnOpen ? 'vpn' : activeWorkspaceId ? 'workspace' : 'home'}
+      onHome={() => { setVpnOpen(false); setWorkspace(null) }}
+      onWorkspace={() => {
+        setVpnOpen(false)
+        if (!activeWorkspaceId) {
+          const recent = [...store.workspaces].sort((a, b) => new Date(b.openedAt || 0) - new Date(a.openedAt || 0))[0]
+          if (recent) openWorkspace(recent.id)
+        }
+      }}
+      onVpn={() => { setVpnPreset(null); setVpnOpen(true) }}
+      onSettings={() => setSettingsOpen(true)}
+    />
+  )
+  const overlays = (
+    <>
+      {vpnOpen && (
+        <div className="vpn-overlay">
+          <button className="vpn-close" onClick={() => setVpnOpen(false)} title="Close"><Icon name="close" size={18} /></button>
+          <VpnScreen store={store} preset={vpnPreset} onConsumePreset={() => setVpnPreset(null)} />
+        </div>
+      )}
+      {flash && <div className="st-toast">{flash}</div>}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+    </>
+  )
+
   // ── Home ──
   if (!activeWorkspaceId) {
     return (
-      <div className="app">
+      <div className="app has-footer">
         <Home
           store={store}
           onOpen={openWorkspace}
@@ -354,7 +412,8 @@ export default function App() {
           onDelete={deleteWorkspace}
           onSettings={() => setSettingsOpen(true)}
         />
-        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+        {footer}
+        {overlays}
       </div>
     )
   }
@@ -377,11 +436,11 @@ export default function App() {
   const base = workspace
 
   return (
-    <div className="app">
+    <div className="app has-footer">
       <header className="topbar">
-        <button className="home-back" onClick={() => setWorkspace(null)} title="Back to Home">← Home</button>
+        <button className="home-back" onClick={() => setWorkspace(null)} title="Back to Home"><Icon name="chevronLeft" size={15} /> Home</button>
         <div className="brand ws-brand">
-          <span className="logo" aria-hidden="true">▦</span>
+          <span className="logo" aria-hidden="true"><Icon name="table" size={15} /></span>
           <span className="ws-top-name" title={workspace.name}>{workspace.name}</span>
         </div>
         <div className="grow" />
@@ -389,8 +448,8 @@ export default function App() {
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}
         </span>
         <span className="email" title={session.user.email}>{session.user.email}</span>
-        <button className="btn ghost sm" onClick={() => setSettingsOpen(true)} title="Settings">⚙<span className="hide-sm"> Settings</span></button>
-        <button className="btn ghost sm" onClick={() => supabase.auth.signOut()} title="Sign out">↩<span className="hide-sm"> Sign out</span></button>
+        <button className="btn ghost sm icon-txt" onClick={() => setSettingsOpen(true)} title="Settings"><Icon name="settings" size={15} /><span className="hide-sm">Settings</span></button>
+        <button className="btn ghost sm icon-txt" onClick={() => supabase.auth.signOut()} title="Sign out"><Icon name="signout" size={15} /><span className="hide-sm">Sign out</span></button>
       </header>
 
       <TableTabs base={base} api={api} />
@@ -408,7 +467,7 @@ export default function App() {
           />
         )}
         <div className="workspace">
-          {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
+          {view.type === 'grid' && <GridView table={table} view={view} records={records} api={api} onExpand={setExpandedId} onVpnSend={(rid) => sendToVpn(table.id, rid)} />}
           {view.type === 'kanban' && <KanbanView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
           {view.type === 'gallery' && <GalleryView table={table} view={view} records={records} api={api} onExpand={setExpandedId} />}
         </div>
@@ -424,7 +483,8 @@ export default function App() {
           onClose={() => setExpandedId(null)}
         />
       )}
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {footer}
+      {overlays}
     </div>
   )
 }

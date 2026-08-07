@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Icon from '../Icon'
 
 export default function TableTabs({ base, api }) {
   const [editing, setEditing] = useState(null)
@@ -24,11 +25,11 @@ export default function TableTabs({ base, api }) {
             </button>
           )}
           {base.tables.length > 1 && t.id === base.activeTableId && (
-            <button className="ttab-x" title="Delete table" onClick={() => api.deleteTable(t.id)}>×</button>
+            <button className="ttab-x" title="Delete table" onClick={() => api.deleteTable(t.id)}><Icon name="close" size={13} /></button>
           )}
         </div>
       ))}
-      <button className="ttab-add" title="Add table" onClick={() => api.addTable()}>+ Add table</button>
+      <button className="ttab-add" title="Add table" onClick={() => api.addTable()}><Icon name="plus" size={13} /> Add table</button>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
+import Icon from '../Icon'
 
 export default function Auth() {
   const [mode, setMode] = useState('signin')
@@ -39,7 +40,7 @@ export default function Auth() {
   return (
     <div className="auth-wrap">
       <form className="auth-card" onSubmit={submit}>
-        <div className="auth-logo" aria-hidden="true">▦</div>
+        <div className="auth-logo" aria-hidden="true"><Icon name="table" size={26} /></div>
         <h1>Sessions Table</h1>
         <p className="sub">Sign in with your Sessions account.</p>
 

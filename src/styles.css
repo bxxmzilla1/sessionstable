@@ -422,6 +422,85 @@ body {
 .sm-error { font-size: 12px; color: #dc2626; margin: 2px 0 0; }
 .sm-foot { display: flex; align-items: center; padding: 14px 20px; border-top: 1px solid var(--border); }
 
+/* ── Icons (SVG, no emoji) ── */
+.icon { display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
+.hs-nav { display: flex; align-items: center; gap: 9px; }
+.home-back { display: inline-flex; align-items: center; gap: 5px; }
+.btn.icon-txt { display: inline-flex; align-items: center; gap: 6px; }
+.ttab-add { display: inline-flex; align-items: center; gap: 5px; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; }
+.brand .logo .icon, .hs-brand .logo .icon, .auth-logo .icon { color: #fff; }
+
+/* ── Proxy cell "send to phone" button ── */
+.proxy-cell { display: flex; align-items: center; height: 40px; }
+.proxy-cell-input { flex: 1; min-width: 0; }
+.proxy-vpn-btn {
+  flex-shrink: 0; width: 30px; height: 30px; margin-right: 5px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  border: 1px solid var(--border2); background: var(--surface2); color: var(--accent-strong); transition: all .12s;
+}
+.proxy-vpn-btn:hover { border-color: var(--accent-light); background: var(--accent-soft); }
+
+/* ── Toast ── */
+.st-toast {
+  position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 200;
+  background: var(--text); color: #fff; font-size: 13px; font-weight: 600;
+  padding: 10px 16px; border-radius: 10px; box-shadow: var(--shadow-pop); animation: scrim-in .18s ease;
+}
+
+/* ── Footer nav (mobile) ── */
+.footer-nav { display: none; }
+
+/* ── VPN screen ── */
+.vpn-overlay { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow: auto; }
+.vpn-close {
+  position: fixed; top: 12px; right: 12px; z-index: 62; width: 38px; height: 38px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  color: var(--text2); background: var(--surface); border: 1px solid var(--border2);
+}
+.vpn-close:hover { color: var(--text); border-color: var(--accent-light); }
+.vpn { min-height: 100%; display: flex; justify-content: center; padding: 28px 18px 100px;
+  background: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(124,58,237,0.14), transparent 60%), var(--bg); }
+.vpn-inner { width: min(460px, 100%); }
+.vpn-head { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.vpn-badge {
+  width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  color: #fff; background: linear-gradient(135deg, #a78bfa, #7c3aed); box-shadow: 0 8px 22px rgba(124,58,237,0.35);
+}
+.vpn-head h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+.vpn-sub { margin: 2px 0 0; font-size: 13px; color: var(--text2); }
+.vpn-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.vpn-field span { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+.vpn-select { position: relative; display: flex; align-items: center; }
+.vpn-select select {
+  width: 100%; appearance: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--text);
+  padding: 13px 40px 13px 14px; border: 1px solid var(--border2); border-radius: 12px; background: var(--surface); cursor: pointer;
+}
+.vpn-select select:focus { outline: none; border-color: var(--accent-light); box-shadow: 0 0 0 3px var(--accent-soft); }
+.vpn-select .icon { position: absolute; right: 14px; color: var(--muted); pointer-events: none; }
+.vpn-card {
+  background: var(--surface); border: 1px solid var(--border2); border-radius: 20px; padding: 24px;
+  box-shadow: var(--shadow-md); text-align: center;
+}
+.vpn-card.empty { box-shadow: var(--shadow-sm); }
+.vpn-exit-name { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.vpn-exit-meta { font-size: 13px; color: var(--text2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.vpn-connect {
+  width: 100%; margin-top: 20px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; color: #fff;
+  display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px;
+  border: none; border-radius: 16px; background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  box-shadow: 0 8px 22px rgba(124,58,237,0.35); transition: filter .15s, transform .1s;
+}
+.vpn-connect:hover { filter: brightness(1.06); }
+.vpn-connect:active { transform: scale(0.99); }
+.vpn-copy {
+  width: 100%; margin-top: 10px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  color: var(--accent-strong); background: var(--accent-softer); border: 1px solid var(--border2); border-radius: 12px; padding: 11px;
+}
+.vpn-copy:hover { background: var(--accent-soft); }
+.vpn-note { font-size: 12px; color: var(--text2); line-height: 1.55; margin: 14px 0 0; }
+.vpn-empty-note { font-size: 13px; color: var(--muted); padding: 18px 8px; }
+
 /* Auth */
 .auth-wrap { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; background: radial-gradient(ellipse 70% 55% at 50% 0%, rgba(167,139,250,0.22), transparent 60%), radial-gradient(ellipse 50% 40% at 85% 100%, rgba(124,58,237,0.12), transparent 55%), var(--bg); }
 .auth-card { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 30px 26px; box-shadow: var(--shadow-md); text-align: center; }
@@ -527,6 +606,25 @@ body {
   /* Slimmer scrollbars */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-thumb { border: none; }
+
+  /* Footer tab bar owns the bottom; content reserves room for it */
+  .footer-nav {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+    height: 62px; padding-bottom: env(safe-area-inset-bottom, 0);
+    background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -4px 20px rgba(31,26,46,0.06);
+  }
+  .fn-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
+    background: transparent; border: none; color: var(--muted);
+  }
+  .fn-item.on { color: var(--accent-strong); }
+  .app.has-footer { padding-bottom: 62px; }
+  .app.has-footer .home-main { padding-bottom: 24px; }
+  .vpn { padding-bottom: 90px; }
+  /* The footer must stay tappable above the VPN overlay */
+  .vpn-overlay { bottom: 62px; }
+  .st-toast { bottom: 76px; }
 }
 
 @keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }

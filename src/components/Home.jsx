@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { WORKSPACE_COLORS, formatOpened } from '../base'
+import Icon from '../Icon'
 
 function initials(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
@@ -24,9 +25,9 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSe
     <div className="home">
       {sideOpen && <div className="home-scrim" onClick={() => setSideOpen(false)} />}
       <aside className={'home-side' + (sideOpen ? ' open' : '')}>
-        <div className="hs-brand"><span className="logo">▦</span> Sessions Table</div>
-        <button className="hs-nav on">⌂ Home</button>
-        <button className="hs-nav" onClick={() => { setSideOpen(false); onSettings() }}>⚙ Settings</button>
+        <div className="hs-brand"><span className="logo"><Icon name="table" size={16} /></span> Sessions Table</div>
+        <button className="hs-nav on"><Icon name="home" size={16} /> Home</button>
+        <button className="hs-nav" onClick={() => { setSideOpen(false); onSettings() }}><Icon name="settings" size={16} /> Settings</button>
         <div className="hs-section">
           <div className="hs-section-head">
             <span>Workspaces</span>
@@ -49,7 +50,7 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSe
 
       <main className="home-main">
         <div className="home-head">
-          <button className="home-menu-btn" onClick={() => setSideOpen(true)} title="Menu">☰</button>
+          <button className="home-menu-btn" onClick={() => setSideOpen(true)} title="Menu"><Icon name="menu" size={17} /></button>
           <h1>Home</h1>
           <button className="btn primary sm" onClick={onCreate}>+ Create</button>
         </div>
@@ -71,7 +72,7 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSe
                 <div className="ws-card-top">
                   <div className="ws-icon" style={{ background: c.bg, color: c.accent }}>{initials(w.name)}</div>
                   <div className="ws-menu-wrap" onClick={(e) => e.stopPropagation()}>
-                    <button className="ws-menu-btn" onClick={() => setMenu(menu === w.id ? null : w.id)}>⋯</button>
+                    <button className="ws-menu-btn" onClick={() => setMenu(menu === w.id ? null : w.id)}><Icon name="more" size={18} /></button>
                     {menu === w.id && (
                       <div className="ws-menu">
                         <button onClick={() => { setEditing(w.id); setMenu(null) }}>Rename</button>

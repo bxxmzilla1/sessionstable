@@ -1,4 +1,5 @@
 import Cell from './Cell'
+import Icon from '../Icon'
 import { FIELD_TYPE_MAP } from '../constants'
 
 // Full-screen record editor (Airtable's "expand record").
@@ -9,13 +10,13 @@ export default function RecordModal({ table, record, onCell, onAddOption, onDele
       <div className="record-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="rm-head">
           <div className="rm-title">{primary || 'Untitled record'}</div>
-          <button className="icon-btn" onClick={onClose} title="Close">×</button>
+          <button className="icon-btn" onClick={onClose} title="Close"><Icon name="close" size={18} /></button>
         </div>
         <div className="rm-body">
           {table.fields.map((f) => (
             <div className="rm-field" key={f.id}>
               <div className="rm-field-label">
-                <span className="fm-type-icon sm">{FIELD_TYPE_MAP[f.type]?.icon}</span>
+                <span className="fm-type-icon sm"><Icon name={FIELD_TYPE_MAP[f.type]?.icon} size={11} /></span>
                 {f.name}
               </div>
               <div className="rm-field-value">

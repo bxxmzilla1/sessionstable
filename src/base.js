@@ -126,8 +126,12 @@ export function defaultStore() {
 
 /** Accept legacy single-base `{ tables }` or the new `{ workspaces }` shape. */
 export function normalizeStore(data) {
+  // The VPN "send to phone" pointer is a top-level extra kept verbatim so it syncs
+  // from desktop to the phone through the same document.
+  const vpnTarget = data && data.vpnTarget && typeof data.vpnTarget === 'object' ? data.vpnTarget : undefined
   if (data && Array.isArray(data.workspaces) && data.workspaces.length) {
     return {
+      vpnTarget,
       workspaces: data.workspaces.map((w) => ({
         id: w.id || uid('ws'),
         name: w.name || 'Untitled Workspace',

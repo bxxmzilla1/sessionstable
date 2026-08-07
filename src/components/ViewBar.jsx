@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { FIELD_TYPE_MAP, operatorsFor } from '../constants'
 import { uid } from '../base'
+import Icon from '../Icon'
 
-const VIEW_ICON = { grid: '▦', kanban: '▤', gallery: '▢' }
+export const VIEW_ICON = { grid: 'grid', kanban: 'kanban', gallery: 'gallery' }
 
 function Popover({ children, onClose, className }) {
   const ref = useRef(null)
@@ -25,8 +26,8 @@ export default function ViewBar({ table, view, api, search, onSearch, sidebarOpe
   return (
     <div className="viewbar">
       <div className="vb-left">
-        <button className={'vb-toggle' + (sidebarOpen ? ' on' : '')} onClick={onToggleSidebar} title="Toggle views panel">☰</button>
-        <span className="vb-viewname"><span className="vicon">{VIEW_ICON[view.type]}</span>{view.name}</span>
+        <button className={'vb-toggle' + (sidebarOpen ? ' on' : '')} onClick={onToggleSidebar} title="Toggle views panel"><Icon name="menu" size={17} /></button>
+        <span className="vb-viewname"><Icon name={VIEW_ICON[view.type]} size={14} className="vicon" />{view.name}</span>
       </div>
 
       <div className="vb-right">
@@ -59,7 +60,7 @@ export default function ViewBar({ table, view, api, search, onSearch, sidebarOpe
                       const hidden = e.target.checked ? view.hidden.filter((x) => x !== f.id) : [...view.hidden, f.id]
                       api.updateView(table.id, view.id, { hidden })
                     }} />
-                  <span className="fm-type-icon sm">{FIELD_TYPE_MAP[f.type]?.icon}</span>{f.name}
+                  <span className="fm-type-icon sm"><Icon name={FIELD_TYPE_MAP[f.type]?.icon} size={11} /></span>{f.name}
                 </label>
               ))}
             </Popover>
@@ -89,7 +90,7 @@ export default function ViewBar({ table, view, api, search, onSearch, sidebarOpe
                       <input className="filter-val" value={flt.value || ''} placeholder="value"
                         onChange={(e) => api.updateFilter(table.id, view.id, flt.id, { value: e.target.value })} />
                     )}
-                    <button className="filter-x" onClick={() => api.removeFilter(table.id, view.id, flt.id)}>×</button>
+                    <button className="filter-x" onClick={() => api.removeFilter(table.id, view.id, flt.id)}><Icon name="close" size={14} /></button>
                   </div>
                 )
               })}

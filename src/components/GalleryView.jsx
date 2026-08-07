@@ -1,5 +1,6 @@
 import { OPTION_PALETTE } from '../constants'
 import { displayValue } from '../base'
+import Icon from '../Icon'
 
 // Card grid. Shows the primary field as a heading plus the next few fields.
 export default function GalleryView({ table, view, records, api, onExpand }) {
@@ -34,7 +35,7 @@ export default function GalleryView({ table, view, records, api, onExpand }) {
               return (
                 <div className="gcard-row" key={f.id}>
                   <span className="gc-label">{f.name}</span>
-                  <span className="gc-val">{f.type === 'checkbox' ? '✓' : dv}</span>
+                  <span className="gc-val">{f.type === 'checkbox' ? <Icon name="check" size={13} /> : dv}</span>
                 </div>
               )
             })}

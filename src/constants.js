@@ -1,16 +1,17 @@
 // Field types (mirrors Airtable's core set).
+// `icon` is an Icon component name (see Icon.jsx) — rendered as an SVG, never an emoji.
 export const FIELD_TYPES = [
-  { id: 'text', name: 'Single line text', icon: 'A' },
-  { id: 'longText', name: 'Long text', icon: '¶' },
-  { id: 'number', name: 'Number', icon: '#' },
-  { id: 'checkbox', name: 'Checkbox', icon: '☑' },
-  { id: 'singleSelect', name: 'Single select', icon: '◉' },
-  { id: 'multiSelect', name: 'Multiple select', icon: '☰' },
-  { id: 'date', name: 'Date', icon: '◷' },
-  { id: 'email', name: 'Email', icon: '@' },
-  { id: 'url', name: 'URL', icon: '↗' },
-  { id: 'phone', name: 'Phone', icon: '☏' },
-  { id: 'rating', name: 'Rating', icon: '★' },
+  { id: 'text', name: 'Single line text', icon: 'text' },
+  { id: 'longText', name: 'Long text', icon: 'longText' },
+  { id: 'number', name: 'Number', icon: 'number' },
+  { id: 'checkbox', name: 'Checkbox', icon: 'checkbox' },
+  { id: 'singleSelect', name: 'Single select', icon: 'singleSelect' },
+  { id: 'multiSelect', name: 'Multiple select', icon: 'multiSelect' },
+  { id: 'date', name: 'Date', icon: 'date' },
+  { id: 'email', name: 'Email', icon: 'email' },
+  { id: 'url', name: 'URL', icon: 'url' },
+  { id: 'phone', name: 'Phone', icon: 'phone' },
+  { id: 'rating', name: 'Rating', icon: 'rating' },
 ]
 
 export const FIELD_TYPE_MAP = Object.fromEntries(FIELD_TYPES.map((t) => [t.id, t]))
