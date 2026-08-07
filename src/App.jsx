@@ -9,6 +9,8 @@ import GridView from './components/GridView'
 import KanbanView from './components/KanbanView'
 import GalleryView from './components/GalleryView'
 import RecordModal from './components/RecordModal'
+import SettingsModal from './components/SettingsModal'
+import { deleteBundleTeams } from './bundle'
 import {
   displayValue, emptyTable, newField, newRecord, newView, newWorkspace,
   normalizeStore, uid,
@@ -71,6 +73,7 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const saveTimer = useRef(null)
   const loadedFor = useRef(null)
   const lastRemoteStamp = useRef(null) // updated_at of the last version we loaded or saved
@@ -196,13 +199,27 @@ export default function App() {
   }, [update])
 
   // Deleting a row (or a table/workspace containing rows) that Sessions 4 saved also deletes the
-  // matching cloud launch links — the "vice versa" of Sessions 4 deleting the row when a launch
-  // link is removed. Idempotent, so a double-invoked updater in dev strict mode is harmless.
+  // matching cloud launch links AND their bundle.social teams — the "vice versa" of Sessions 4
+  // deleting the row when a launch link is removed. Idempotent, so a double-invoked updater in
+  // dev strict mode is harmless (the second pass finds no links left to read).
   const deleteLaunchTokens = useCallback((tokens) => {
     const list = [...new Set((tokens || []).filter(Boolean))]
     if (!list.length || !session?.user) return
-    supabase.from('session_links').delete().eq('user_id', session.user.id).in('token', list)
-      .then(({ error }) => { if (error) console.error(error) })
+    ;(async () => {
+      // Read the payloads first — they carry each container's bundle.social team id.
+      let teamIds = []
+      try {
+        const { data } = await supabase.from('session_links')
+          .select('payload').eq('user_id', session.user.id).in('token', list)
+        teamIds = (data || []).map((r) => r?.payload?.bundleTeamId).filter(Boolean)
+      } catch (e) { console.error(e) }
+      const { error } = await supabase.from('session_links')
+        .delete().eq('user_id', session.user.id).in('token', list)
+      if (error) console.error(error)
+      // Best-effort — failures logged, never blocking (e.g. no API key configured yet).
+      const res = await deleteBundleTeams(teamIds)
+      if (res.errors.length) console.warn('[bundle team delete]', res.errors)
+    })()
   }, [session])
 
   const deleteWorkspace = useCallback((id) => {
@@ -334,7 +351,9 @@ export default function App() {
           onCreate={createWorkspace}
           onRename={renameWorkspace}
           onDelete={deleteWorkspace}
+          onSettings={() => setSettingsOpen(true)}
         />
+        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       </div>
     )
   }
@@ -369,6 +388,7 @@ export default function App() {
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}
         </span>
         <span className="email" title={session.user.email}>{session.user.email}</span>
+        <button className="btn ghost sm" onClick={() => setSettingsOpen(true)} title="Settings">⚙ Settings</button>
         <button className="btn ghost sm" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </header>
 
@@ -395,6 +415,7 @@ export default function App() {
           onClose={() => setExpandedId(null)}
         />
       )}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }

@@ -8,7 +8,7 @@ function initials(name) {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-export default function Home({ store, onOpen, onCreate, onRename, onDelete }) {
+export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSettings }) {
   const [editing, setEditing] = useState(null)
   const [menu, setMenu] = useState(null)
 
@@ -23,6 +23,7 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete }) {
       <aside className="home-side">
         <div className="hs-brand"><span className="logo">▦</span> Sessions Table</div>
         <button className="hs-nav on">⌂ Home</button>
+        <button className="hs-nav" onClick={onSettings}>⚙ Settings</button>
         <div className="hs-section">
           <div className="hs-section-head">
             <span>Workspaces</span>
