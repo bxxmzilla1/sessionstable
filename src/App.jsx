@@ -16,7 +16,7 @@ import Icon from './Icon'
 import { deleteBundleTeams } from './bundle'
 import {
   displayValue, emptyTable, newField, newRecord, newView, newWorkspace,
-  normalizeStore, uid,
+  normalizeStore, uid, TEXT_FIELD_TYPES,
 } from './base'
 import { OPTION_PALETTE } from './constants'
 
@@ -367,43 +367,85 @@ export default function App() {
         return { ...t, records: t.records.filter((r) => r.id !== recordId) }
       })
     },
-    // Paste a list into one column: overwrite rows from `startRecordId` downward in the
-    // visible order (`orderedIds`), then create fresh rows for any leftover values.
-    pasteFillDown(tableId, fieldId, startRecordId, values, orderedIds) {
-      if (!values || !values.length) return
+    // Set many cells at once: entries = [{ recordId, fieldId, value }].
+    setCellsBulk(tableId, entries) {
+      if (!entries || !entries.length) return
       mutateTable(tableId, (t) => {
+        const patch = new Map()
+        for (const { recordId, fieldId, value } of entries) {
+          if (!patch.has(recordId)) patch.set(recordId, {})
+          patch.get(recordId)[fieldId] = value
+        }
+        return {
+          ...t,
+          records: t.records.map((r) => (patch.has(r.id) ? { ...r, cells: { ...r.cells, ...patch.get(r.id) } } : r)),
+        }
+      })
+    },
+    deleteRecords(tableId, recordIds) {
+      const gone = new Set(recordIds || [])
+      if (!gone.size) return
+      mutateTable(tableId, (t) => {
+        const tokens = t.records.filter((r) => gone.has(r.id) && r.launch?.token).map((r) => r.launch.token)
+        if (tokens.length) deleteLaunchTokens(tokens)
+        return { ...t, records: t.records.filter((r) => !gone.has(r.id)) }
+      })
+    },
+    // Paste copied rows (each keyed by column NAME) starting at `startRecordId`: overwrite
+    // downward in the visible order (`orderedIds`), append new rows for leftovers. Column
+    // names missing in this sheet are created as text so nothing is lost.
+    pasteRows(tableId, startRecordId, rows, orderedIds) {
+      if (!rows || !rows.length) return
+      mutateTable(tableId, (t) => {
+        const fields = [...t.fields]
+        const fieldFor = (name) => {
+          let f = fields.find((x) => String(x.name || '').trim().toLowerCase() === String(name).trim().toLowerCase())
+          if (!f) { f = newField(name, 'text'); fields.push(f) }
+          return f
+        }
         const records = t.records.map((r) => ({ ...r, cells: { ...r.cells } }))
         const byId = new Map(records.map((r) => [r.id, r]))
         const startIdx = orderedIds.indexOf(startRecordId)
         const targets = startIdx >= 0 ? orderedIds.slice(startIdx) : []
-        values.forEach((val, i) => {
+        rows.forEach((cellsByName, i) => {
+          const entries = Object.entries(cellsByName || {}).filter(([n, v]) => n && v !== '' && v != null)
+          if (!entries.length) return
+          const cellObj = {}
+          for (const [name, value] of entries) cellObj[fieldFor(name).id] = value
           if (i < targets.length) {
             const rec = byId.get(targets[i])
-            if (rec) rec.cells[fieldId] = val
+            if (rec) Object.assign(rec.cells, cellObj)
           } else {
-            records.push(newRecord({ [fieldId]: val }))
+            records.push(newRecord(cellObj))
           }
         })
-        return { ...t, records }
+        return { ...t, fields, records }
       })
     },
-    // Paste a copied row (keyed by column NAME) into this sheet — overwrite `targetRecordId`
-    // or append a new row. Column names missing here are created as text so nothing is lost.
-    pasteRow(tableId, targetRecordId, cellsByName) {
-      const entries = Object.entries(cellsByName || {}).filter(([n, v]) => n && v !== '' && v != null)
-      if (!entries.length) return
+    // Paste a 2D block of text starting at a cell: fills right across the visible columns
+    // (`orderedFieldIds`) and down the visible rows, creating new rows when it runs out.
+    // Non-text columns in the way are skipped (position is consumed, value dropped).
+    pasteGrid(tableId, startRecordId, startFieldId, grid, orderedIds, orderedFieldIds) {
+      if (!grid || !grid.length) return
       mutateTable(tableId, (t) => {
-        const fields = [...t.fields]
-        const cellObj = {}
-        for (const [name, value] of entries) {
-          let f = fields.find((x) => String(x.name || '').trim().toLowerCase() === String(name).trim().toLowerCase())
-          if (!f) { f = newField(name, 'text'); fields.push(f) }
-          cellObj[f.id] = value
-        }
-        const records = targetRecordId
-          ? t.records.map((r) => (r.id === targetRecordId ? { ...r, cells: { ...r.cells, ...cellObj } } : r))
-          : [...t.records, newRecord(cellObj)]
-        return { ...t, fields, records }
+        const colStart = orderedFieldIds.indexOf(startFieldId)
+        if (colStart < 0) return t
+        const fieldById = new Map(t.fields.map((f) => [f.id, f]))
+        const records = t.records.map((r) => ({ ...r, cells: { ...r.cells } }))
+        const byId = new Map(records.map((r) => [r.id, r]))
+        const startIdx = orderedIds.indexOf(startRecordId)
+        const targets = startIdx >= 0 ? orderedIds.slice(startIdx) : []
+        grid.forEach((line, i) => {
+          let rec = i < targets.length ? byId.get(targets[i]) : null
+          if (!rec) { rec = newRecord({}); records.push(rec) }
+          line.forEach((val, j) => {
+            const fid = orderedFieldIds[colStart + j]
+            const f = fid ? fieldById.get(fid) : null
+            if (!f || !TEXT_FIELD_TYPES.includes(f.type)) return
+            rec.cells[fid] = val
+          })
+        })
+        return { ...t, records }
       })
     },
   }), [mutateWorkspace, mutateTable, deleteLaunchTokens])

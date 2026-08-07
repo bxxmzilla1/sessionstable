@@ -198,6 +198,9 @@ export function displayValue(field, value) {
   }
 }
 
+// Field types whose raw cell value is plain text — safe targets for spreadsheet-style paste.
+export const TEXT_FIELD_TYPES = ['text', 'longText', 'number', 'email', 'url', 'phone']
+
 export function emptyValueFor(type) {
   if (type === 'checkbox') return false
   if (type === 'multiSelect') return []
