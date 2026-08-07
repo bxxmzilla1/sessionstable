@@ -5,13 +5,14 @@ import { parseProxyString, shadowrocketLink, proxyPreview } from '../lib/proxy'
 const findProxyField = (table) =>
   (table?.fields || []).find((f) => f.type === 'text' && String(f.name || '').trim().toLowerCase() === 'proxy')
 
-// A friendly row name: primary field, else Container / Username, else "Row N".
+// Always label a row by its "Container" column value first; fall back only when that
+// cell is empty (primary field, then Username, then "Row N").
 function rowLabel(table, rec, index) {
   const byName = (name) => (table.fields || []).find((f) => String(f.name || '').trim().toLowerCase() === name)
-  const primary = table.primaryFieldId && rec.cells[table.primaryFieldId]
   const container = byName('container') && rec.cells[byName('container').id]
+  const primary = table.primaryFieldId && rec.cells[table.primaryFieldId]
   const username = byName('username') && rec.cells[byName('username').id]
-  return String(primary || container || username || `Row ${index + 1}`)
+  return String(container || primary || username || `Row ${index + 1}`)
 }
 
 export default function VpnScreen({ store, preset, onConsumePreset }) {
