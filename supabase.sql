@@ -139,3 +139,28 @@ begin
 end $$;
 
 grant execute on function public.join_workspace_share(text) to authenticated;
+
+-- ── Cross-account launch links ────────────────────────────────────────────────
+-- Launch links behave like capability URLs: the token is 18 random bytes, and the
+-- only way another account learns it is through a workspace shared with them (the
+-- row's rocket button). So any signed-in user who presents the exact token may
+-- fetch — or delete — that link, letting shared-workspace members launch each
+-- other's containers from their own Sessions 4 account.
+
+create or replace function public.get_session_link(link_token text)
+returns table (label text, payload jsonb)
+language sql security definer stable set search_path = public as
+$$ select l.label, l.payload from session_links l where l.token = link_token $$;
+
+grant execute on function public.get_session_link(text) to authenticated;
+
+create or replace function public.delete_session_link(link_token text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p jsonb;
+begin
+  delete from session_links where token = link_token returning payload into p;
+  return p;
+end $$;
+
+grant execute on function public.delete_session_link(text) to authenticated;
