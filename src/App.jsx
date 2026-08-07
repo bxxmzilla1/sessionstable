@@ -10,6 +10,7 @@ import KanbanView from './components/KanbanView'
 import GalleryView from './components/GalleryView'
 import RecordModal from './components/RecordModal'
 import SettingsModal from './components/SettingsModal'
+import { ShareModal, JoinModal } from './components/ShareModal'
 import VpnScreen from './components/VpnScreen'
 import FooterNav from './components/FooterNav'
 import Icon from './Icon'
@@ -40,6 +41,13 @@ function matchFilter(field, value, op, target) {
     case 'unchecked': return !value
     default: return true
   }
+}
+
+function genShareCode() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' // no 0/O/1/I/L lookalikes
+  const buf = new Uint32Array(8)
+  crypto.getRandomValues(buf)
+  return [...buf].map((n) => chars[n % chars.length]).join('')
 }
 
 function processRecords(table, view, search) {
@@ -81,6 +89,18 @@ export default function App() {
   const [vpnOpen, setVpnOpen] = useState(false)
   const [vpnPreset, setVpnPreset] = useState(null)
   const [flash, setFlash] = useState('')
+  // Workspace sharing: share rows visible to me (mine + ones I've joined), and the
+  // sheet documents of owners who shared a workspace with me.
+  const [shares, setShares] = useState([])
+  const [foreignDocs, setForeignDocs] = useState({}) // ownerId -> normalized store
+  const [shareWsId, setShareWsId] = useState(null) // workspace whose share modal is open
+  const [joinOpen, setJoinOpen] = useState(false)
+  const sharesRef = useRef([])
+  const sharesJson = useRef(null)
+  const foreignDocsRef = useRef({})
+  const foreignStamps = useRef({}) // ownerId -> updated_at we last loaded/saved
+  const foreignSaveTimers = useRef({})
+  const foreignSaving = useRef(new Set())
   const vpnSeeded = useRef(false)
   const vpnSeenAt = useRef(null)
   const gridClipboard = useRef(null) // in-app clipboard: survives switching tab sheets
@@ -124,6 +144,72 @@ export default function App() {
     } catch (e) {}
   }, [session])
 
+  useEffect(() => { sharesRef.current = shares }, [shares])
+  useEffect(() => { foreignDocsRef.current = foreignDocs }, [foreignDocs])
+
+  // ── Workspace sharing ──
+  const loadForeignDoc = useCallback(async (ownerId) => {
+    try {
+      const { data } = await supabase.from('sheets').select('data, updated_at').eq('user_id', ownerId).maybeSingle()
+      if (!data?.updated_at) return
+      foreignStamps.current[ownerId] = data.updated_at
+      setForeignDocs((prev) => ({ ...prev, [ownerId]: normalizeStore(data.data || null) }))
+    } catch (e) { console.error(e) }
+  }, [])
+
+  // Pull the share rows I can see (mine + joined) and make sure every foreign
+  // owner's document is loaded. State only changes when the rows actually differ.
+  const refreshShares = useCallback(async () => {
+    if (!session?.user) return
+    try {
+      const { data } = await supabase.from('workspace_shares').select('id, owner_id, ws_id, code')
+      const rows = data || []
+      const json = JSON.stringify(rows)
+      if (json !== sharesJson.current) {
+        sharesJson.current = json
+        setShares(rows)
+      }
+      const owners = [...new Set(rows.filter((r) => r.owner_id !== session.user.id).map((r) => r.owner_id))]
+      for (const o of owners) if (!foreignStamps.current[o]) await loadForeignDoc(o)
+    } catch (e) { console.error(e) }
+  }, [session, loadForeignDoc])
+
+  useEffect(() => {
+    if (!session?.user) { setShares([]); setForeignDocs({}); sharesJson.current = null; foreignStamps.current = {}; return }
+    refreshShares()
+  }, [session, refreshShares])
+
+  // Debounced write-back of a shared owner's document (whole doc, one workspace changed).
+  const scheduleForeignSave = useCallback((ownerId) => {
+    setStatus('saving')
+    foreignSaving.current.add(ownerId)
+    clearTimeout(foreignSaveTimers.current[ownerId])
+    foreignSaveTimers.current[ownerId] = setTimeout(async () => {
+      const doc = foreignDocsRef.current[ownerId]
+      if (!doc) { foreignSaving.current.delete(ownerId); return }
+      const stamp = new Date().toISOString()
+      const { error } = await supabase.from('sheets').update({ data: doc, updated_at: stamp }).eq('user_id', ownerId)
+      if (!error) foreignStamps.current[ownerId] = stamp
+      foreignSaving.current.delete(ownerId)
+      setStatus(error ? 'error' : 'saved')
+      if (error) console.error(error)
+    }, 600)
+  }, [])
+
+  const mutateForeignWs = useCallback((ownerId, wsId, fn) => {
+    setForeignDocs((prev) => {
+      const doc = prev[ownerId]
+      if (!doc) return prev
+      return { ...prev, [ownerId]: { ...doc, workspaces: doc.workspaces.map((w) => (w.id === wsId ? fn(w) : w)) } }
+    })
+    scheduleForeignSave(ownerId)
+  }, [scheduleForeignSave])
+
+  // A workspace is "foreign" when it reaches me through someone else's share.
+  const foreignShareFor = useCallback((wsId) => (
+    sharesRef.current.find((r) => r.ws_id === wsId && r.owner_id !== session?.user?.id) || null
+  ), [session])
+
   // Live-sync: the Sessions 4 desktop app writes rows into this same document (connected
   // containers, XPaste, XSave). Poll updated_at and pull the fresh document whenever someone
   // else saved — skipped while local edits are still flushing so they aren't clobbered.
@@ -131,6 +217,20 @@ export default function App() {
     if (!session?.user) return
     let stopped = false
     const tick = async () => {
+      if (stopped) return
+      // Shared workspaces: new shares/joins/revocations, plus edits made by the
+      // other accounts inside the owners' documents.
+      try {
+        await refreshShares()
+        const owners = [...new Set(sharesRef.current.filter((r) => r.owner_id !== session.user.id).map((r) => r.owner_id))]
+        if (owners.length) {
+          const { data: metas } = await supabase.from('sheets').select('user_id, updated_at').in('user_id', owners)
+          for (const m of metas || []) {
+            if (stopped || foreignSaving.current.has(m.user_id)) continue
+            if (m.updated_at && m.updated_at !== foreignStamps.current[m.user_id]) await loadForeignDoc(m.user_id)
+          }
+        }
+      } catch (e) { console.error(e) }
       if (stopped || statusRef.current === 'saving') return
       try {
         const { data } = await supabase.from('sheets').select('updated_at').eq('user_id', session.user.id).maybeSingle()
@@ -145,7 +245,7 @@ export default function App() {
     }
     const id = setInterval(tick, 1000)
     return () => { stopped = true; clearInterval(id) }
-  }, [session])
+  }, [session, refreshShares, loadForeignDoc])
 
   const scheduleSave = useCallback((next) => {
     if (!session?.user) return
@@ -170,11 +270,13 @@ export default function App() {
 
   const mutateWorkspace = useCallback((fn) => {
     if (!activeWorkspaceId) return
+    const foreign = foreignShareFor(activeWorkspaceId)
+    if (foreign) { mutateForeignWs(foreign.owner_id, activeWorkspaceId, fn); return }
     update((s) => ({
       ...s,
       workspaces: s.workspaces.map((w) => (w.id === activeWorkspaceId ? fn(w) : w)),
     }))
-  }, [update, activeWorkspaceId])
+  }, [update, activeWorkspaceId, foreignShareFor, mutateForeignWs])
 
   const mutateTable = useCallback((tableId, fn) => {
     mutateWorkspace((w) => ({
@@ -187,11 +289,12 @@ export default function App() {
     setSearch('')
     setExpandedId(null)
     setWorkspace(id)
+    if (foreignShareFor(id)) return // don't stamp openedAt into someone else's document
     update((s) => ({
       ...s,
       workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, openedAt: new Date().toISOString() } : w)),
     }))
-  }, [update, setWorkspace])
+  }, [update, setWorkspace, foreignShareFor])
 
   const createWorkspace = useCallback(() => {
     const ws = newWorkspace('Untitled Workspace')
@@ -202,11 +305,14 @@ export default function App() {
   }, [update, setWorkspace])
 
   const renameWorkspace = useCallback((id, name) => {
+    const clean = (name || '').trim()
+    const foreign = foreignShareFor(id)
+    if (foreign) { mutateForeignWs(foreign.owner_id, id, (w) => ({ ...w, name: clean || w.name })); return }
     update((s) => ({
       ...s,
-      workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name: (name || '').trim() || w.name } : w)),
+      workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name: clean || w.name } : w)),
     }))
-  }, [update])
+  }, [update, foreignShareFor, mutateForeignWs])
 
   // Desktop "send to phone": stamp a VPN target into the synced document. The phone,
   // already polling every second, opens its VPN screen pre-selected to this exact row.
@@ -254,7 +360,25 @@ export default function App() {
     })()
   }, [session])
 
-  const deleteWorkspace = useCallback((id) => {
+  const deleteWorkspace = useCallback(async (id) => {
+    // A shared workspace someone else owns: "delete" just means leave the share.
+    const foreign = foreignShareFor(id)
+    if (foreign) {
+      try {
+        await supabase.from('workspace_share_members').delete().eq('share_id', foreign.id).eq('user_id', session.user.id)
+      } catch (e) { console.error(e) }
+      sharesJson.current = null
+      setShares((prev) => prev.filter((r) => r.id !== foreign.id))
+      if (activeWorkspaceId === id) setWorkspace(null)
+      return
+    }
+    // My own: revoke its share (if any) so members lose access, then delete it.
+    const mine = sharesRef.current.find((r) => r.ws_id === id && r.owner_id === session?.user?.id)
+    if (mine) {
+      try { await supabase.from('workspace_shares').delete().eq('id', mine.id) } catch (e) { console.error(e) }
+      sharesJson.current = null
+      setShares((prev) => prev.filter((r) => r.id !== mine.id))
+    }
     update((s) => {
       const gone = s.workspaces.find((w) => w.id === id)
       if (gone) deleteLaunchTokens((gone.tables || []).flatMap((t) => (t.records || []).map((r) => r.launch?.token)))
@@ -262,7 +386,54 @@ export default function App() {
       return { ...s, workspaces }
     })
     if (activeWorkspaceId === id) setWorkspace(null)
-  }, [update, activeWorkspaceId, setWorkspace, deleteLaunchTokens])
+  }, [update, activeWorkspaceId, setWorkspace, deleteLaunchTokens, foreignShareFor, session])
+
+  // Owner: create (or reopen) the share code for a workspace.
+  const shareWorkspace = useCallback(async (wsId) => {
+    const existing = sharesRef.current.find((r) => r.ws_id === wsId && r.owner_id === session?.user?.id)
+    if (existing) { setShareWsId(wsId); return }
+    try {
+      const { data, error } = await supabase.from('workspace_shares')
+        .insert({ owner_id: session.user.id, ws_id: wsId, code: genShareCode() })
+        .select('id, owner_id, ws_id, code')
+        .single()
+      if (error) throw error
+      sharesJson.current = null
+      setShares((prev) => [...prev, data])
+      setShareWsId(wsId)
+    } catch (e) {
+      console.error(e)
+      setFlash('Could not create a share code')
+      setTimeout(() => setFlash(''), 1800)
+    }
+  }, [session])
+
+  const revokeShare = useCallback(async (wsId) => {
+    const row = sharesRef.current.find((r) => r.ws_id === wsId && r.owner_id === session?.user?.id)
+    if (row) {
+      try { await supabase.from('workspace_shares').delete().eq('id', row.id) } catch (e) { console.error(e) }
+      sharesJson.current = null
+      setShares((prev) => prev.filter((r) => r.id !== row.id))
+    }
+    setShareWsId(null)
+    setFlash('Sharing stopped')
+    setTimeout(() => setFlash(''), 1800)
+  }, [session])
+
+  // Joiner: redeem a code, load the owner's document, and open the workspace.
+  const joinWorkspace = useCallback(async (code) => {
+    const { data, error } = await supabase.rpc('join_workspace_share', { share_code: code })
+    if (error) throw new Error(error.message?.includes('Invalid') ? 'Invalid share code' : (error.message || 'Could not join'))
+    const row = Array.isArray(data) ? data[0] : data
+    if (!row) throw new Error('Invalid share code')
+    if (row.owner_id === session?.user?.id) throw new Error('That code is for your own workspace')
+    await loadForeignDoc(row.owner_id)
+    sharesJson.current = null
+    await refreshShares()
+    setWorkspace(row.ws_id)
+    setFlash('Joined shared workspace')
+    setTimeout(() => setFlash(''), 1800)
+  }, [session, loadForeignDoc, refreshShares, setWorkspace])
 
   const api = useMemo(() => ({
     addTable() {
@@ -322,6 +493,7 @@ export default function App() {
         fields: t.fields.map((f) => {
           if (f.id !== fieldId) return f
           const next = { ...f, name: patch.name ?? f.name, type: patch.type ?? f.type }
+          if (patch.width !== undefined) next.width = patch.width // saved with the sheet → synced to the account
           if (['singleSelect', 'multiSelect'].includes(next.type)) next.options = patch.options ?? f.options ?? []
           else delete next.options
           return next
@@ -450,6 +622,20 @@ export default function App() {
     },
   }), [mutateWorkspace, mutateTable, deleteLaunchTokens])
 
+  // My own workspaces plus every workspace shared with me, as one list. Shared ones
+  // carry `_shared` so the UI can badge them and route deletes to "leave".
+  const myId = session?.user?.id
+  const sharedWorkspaces = shares
+    .filter((r) => r.owner_id !== myId)
+    .map((r) => {
+      const doc = foreignDocs[r.owner_id]
+      const w = doc?.workspaces?.find((x) => x.id === r.ws_id)
+      return w ? { ...w, _shared: { ownerId: r.owner_id, shareId: r.id } } : null
+    })
+    .filter(Boolean)
+  const allWorkspaces = [...(store?.workspaces || []), ...sharedWorkspaces]
+  const myCodes = Object.fromEntries(shares.filter((r) => r.owner_id === myId).map((r) => [r.ws_id, r.code]))
+
   if (!ready) return <div className="center muted">Loading…</div>
   if (!session) return <Auth />
   if (!store) return <div className="center muted">Opening your workspaces…</div>
@@ -461,7 +647,7 @@ export default function App() {
       onWorkspace={() => {
         setVpnOpen(false)
         if (!activeWorkspaceId) {
-          const recent = [...store.workspaces].sort((a, b) => new Date(b.openedAt || 0) - new Date(a.openedAt || 0))[0]
+          const recent = [...allWorkspaces].sort((a, b) => new Date(b.openedAt || 0) - new Date(a.openedAt || 0))[0]
           if (recent) openWorkspace(recent.id)
         }
       }}
@@ -474,11 +660,20 @@ export default function App() {
       {vpnOpen && (
         <div className="vpn-overlay">
           <button className="vpn-close" onClick={() => setVpnOpen(false)} title="Close"><Icon name="close" size={18} /></button>
-          <VpnScreen store={store} preset={vpnPreset} onConsumePreset={() => setVpnPreset(null)} />
+          <VpnScreen workspaces={allWorkspaces} preset={vpnPreset} onConsumePreset={() => setVpnPreset(null)} />
         </div>
       )}
       {flash && <div className="st-toast">{flash}</div>}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {shareWsId && (
+        <ShareModal
+          workspaceName={allWorkspaces.find((w) => w.id === shareWsId)?.name || 'Workspace'}
+          code={myCodes[shareWsId] || ''}
+          onRevoke={() => revokeShare(shareWsId)}
+          onClose={() => setShareWsId(null)}
+        />
+      )}
+      {joinOpen && <JoinModal onJoin={joinWorkspace} onClose={() => setJoinOpen(false)} />}
     </>
   )
 
@@ -487,11 +682,14 @@ export default function App() {
     return (
       <div className="app has-footer">
         <Home
-          store={store}
+          workspaces={allWorkspaces}
+          sharedCodes={myCodes}
           onOpen={openWorkspace}
           onCreate={createWorkspace}
           onRename={renameWorkspace}
           onDelete={deleteWorkspace}
+          onShare={shareWorkspace}
+          onJoin={() => setJoinOpen(true)}
           onSettings={() => setSettingsOpen(true)}
         />
         {footer}
@@ -500,7 +698,7 @@ export default function App() {
     )
   }
 
-  const workspace = store.workspaces.find((w) => w.id === activeWorkspaceId)
+  const workspace = allWorkspaces.find((w) => w.id === activeWorkspaceId)
   if (!workspace) {
     return (
       <div className="center muted">
@@ -524,6 +722,9 @@ export default function App() {
         <div className="brand ws-brand">
           <span className="logo" aria-hidden="true"><Icon name="table" size={15} /></span>
           <span className="ws-top-name" title={workspace.name}>{workspace.name}</span>
+          {(workspace._shared || myCodes[workspace.id]) && (
+            <span className="ws-shared-badge">{workspace._shared ? 'Shared with you' : 'Shared'}</span>
+          )}
         </div>
         <div className="grow" />
         <span className={'save ' + status}>

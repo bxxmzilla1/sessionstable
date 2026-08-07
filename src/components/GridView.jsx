@@ -22,7 +22,37 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
   //    | { kind:'cell', keys:['rid|fid'], anchor:{recordId,fieldId} }
   const [sel, setSel] = useState(null)
   const [editing, setEditing] = useState(null) // {recordId, fieldId}
+  const [dragW, setDragW] = useState(null) // live column-resize preview: { fieldId, width }
   const visibleFields = table.fields.filter((f) => !view.hidden.includes(f.id))
+
+  const widthOf = (f) => (dragW?.fieldId === f.id ? dragW.width : f.width)
+  const colStyle = (f) => {
+    const w = widthOf(f)
+    return w ? { width: w, minWidth: w, maxWidth: w } : undefined
+  }
+
+  // Drag the right edge of a header to resize its column; the final width is saved
+  // on the field itself, so it autosaves with the sheet and follows the account.
+  const startResize = (e, f) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const th = e.currentTarget.closest('th')
+    const startX = e.clientX
+    const startW = f.width || (th ? Math.round(th.getBoundingClientRect().width) : 180)
+    let w = startW
+    const move = (ev) => {
+      w = Math.max(70, Math.min(900, Math.round(startW + ev.clientX - startX)))
+      setDragW({ fieldId: f.id, width: w })
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      setDragW(null)
+      if (w !== f.width) api.updateField(table.id, f.id, { width: w })
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
 
   const rowIndex = (rid) => records.findIndex((r) => r.id === rid)
   const colIndex = (fid) => visibleFields.findIndex((f) => f.id === fid)
@@ -272,7 +302,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
           <tr>
             <th className="rownum">#</th>
             {visibleFields.map((f) => (
-              <th key={f.id} className="fieldh">
+              <th key={f.id} className="fieldh" style={colStyle(f)}>
                 <button className="fieldh-btn" onClick={() => setFieldMenu(f.id)}>
                   <span className="fm-type-icon sm"><Icon name={FIELD_TYPE_MAP[f.type]?.icon} size={11} /></span>
                   <span className="fieldh-name">{f.name}</span>
@@ -286,6 +316,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
                     onClose={() => setFieldMenu(null)}
                   />
                 )}
+                <span className="col-resize" title="Drag to resize" onMouseDown={(e) => startResize(e, f)} />
               </th>
             ))}
             <th className="addfield">

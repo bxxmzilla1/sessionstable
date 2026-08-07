@@ -15,8 +15,7 @@ function rowLabel(table, rec, index) {
   return String(container || primary || username || `Row ${index + 1}`)
 }
 
-export default function VpnScreen({ store, preset, onConsumePreset }) {
-  const workspaces = store.workspaces || []
+export default function VpnScreen({ workspaces = [], preset, onConsumePreset }) {
   const [wsId, setWsId] = useState(preset?.wsId || workspaces[0]?.id || null)
 
   const ws = workspaces.find((w) => w.id === wsId) || null

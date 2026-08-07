@@ -9,13 +9,13 @@ function initials(name) {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSettings }) {
+export default function Home({ workspaces, sharedCodes = {}, onOpen, onCreate, onRename, onDelete, onShare, onJoin, onSettings }) {
   const [editing, setEditing] = useState(null)
   const [menu, setMenu] = useState(null)
   // On phones the sidebar is a slide-in drawer; on desktop it's always visible.
   const [sideOpen, setSideOpen] = useState(false)
 
-  const sorted = [...store.workspaces].sort((a, b) => {
+  const sorted = [...workspaces].sort((a, b) => {
     const at = new Date(a.openedAt || 0).getTime()
     const bt = new Date(b.openedAt || 0).getTime()
     return bt - at
@@ -46,12 +46,14 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSe
           </div>
         </div>
         <button className="hs-create" onClick={onCreate}>+ Create workspace</button>
+        <button className="hs-join" onClick={() => { setSideOpen(false); onJoin() }}>Join with code</button>
       </aside>
 
       <main className="home-main">
         <div className="home-head">
           <button className="home-menu-btn" onClick={() => setSideOpen(true)} title="Menu"><Icon name="menu" size={17} /></button>
           <h1>Home</h1>
+          <button className="btn ghost sm" onClick={onJoin}>Join with code</button>
           <button className="btn primary sm" onClick={onCreate}>+ Create</button>
         </div>
         <p className="home-sub">Open a workspace to see its tables, views, and records.</p>
@@ -67,16 +69,26 @@ export default function Home({ store, onOpen, onCreate, onRename, onDelete, onSe
           {sorted.map((w) => {
             const c = WORKSPACE_COLORS[w.color % WORKSPACE_COLORS.length]
             const tableCount = (w.tables || []).length
+            const isForeign = !!w._shared
+            const isSharedByMe = !isForeign && !!sharedCodes[w.id]
             return (
               <div key={w.id} className="ws-card" onClick={() => onOpen(w.id)}>
                 <div className="ws-card-top">
                   <div className="ws-icon" style={{ background: c.bg, color: c.accent }}>{initials(w.name)}</div>
+                  {(isForeign || isSharedByMe) && (
+                    <span className={'ws-card-badge' + (isForeign ? ' foreign' : '')}>
+                      {isForeign ? 'Shared with you' : 'Shared'}
+                    </span>
+                  )}
                   <div className="ws-menu-wrap" onClick={(e) => e.stopPropagation()}>
                     <button className="ws-menu-btn" onClick={() => setMenu(menu === w.id ? null : w.id)}><Icon name="more" size={18} /></button>
                     {menu === w.id && (
                       <div className="ws-menu">
                         <button onClick={() => { setEditing(w.id); setMenu(null) }}>Rename</button>
-                        <button className="danger" onClick={() => { onDelete(w.id); setMenu(null) }}>Delete</button>
+                        {!isForeign && <button onClick={() => { onShare(w.id); setMenu(null) }}>{isSharedByMe ? 'Sharing…' : 'Share'}</button>}
+                        <button className="danger" onClick={() => { onDelete(w.id); setMenu(null) }}>
+                          {isForeign ? 'Leave' : 'Delete'}
+                        </button>
                       </div>
                     )}
                   </div>

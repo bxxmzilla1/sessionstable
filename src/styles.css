@@ -267,7 +267,10 @@ body {
 .gcell { height: 40px; line-height: 40px; padding: 0 10px; font-size: 13px; color: var(--text); cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; border-radius: 2px; }
 .acell.acell-sel { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(124, 108, 255, 0.06); }
 .acell.type-number .gcell { text-align: right; }
-.fieldh { min-width: 180px; width: 180px; padding: 0; }
+.fieldh { min-width: 180px; width: 180px; padding: 0; position: relative; }
+.col-resize { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize; z-index: 7; }
+.col-resize::after { content: ''; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 1px; background: transparent; border-radius: 2px; }
+.col-resize:hover::after, .col-resize:active::after { background: var(--accent); width: 3px; }
 .fieldh-btn { width: 100%; height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 10px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text2); background: transparent; border: none; cursor: pointer; }
 .fieldh-btn:hover { background: var(--surface3); }
 .fieldh-name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -428,6 +431,16 @@ body {
 .sm-hint { font-size: 12px; color: var(--text2); line-height: 1.55; margin: 2px 0 0; }
 .sm-error { font-size: 12px; color: #dc2626; margin: 2px 0 0; }
 .sm-foot { display: flex; align-items: center; padding: 14px 20px; border-top: 1px solid var(--border); }
+
+/* Workspace sharing */
+.share-code-row { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+.share-code { flex: 1; height: 46px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; letter-spacing: 0.16em; border: 1.5px dashed var(--accent); color: var(--accent-strong); background: var(--surface2); border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.danger-text { color: #dc2626; }
+.ws-card-badge { font-size: 10.5px; font-weight: 700; color: var(--accent-strong); background: var(--surface3); border-radius: 999px; padding: 3px 9px; align-self: flex-start; margin-left: auto; margin-right: 6px; white-space: nowrap; }
+.ws-card-badge.foreign { background: var(--accent); color: #fff; }
+.ws-shared-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #fff; margin-left: 8px; white-space: nowrap; }
+.hs-join { margin: 6px 14px 14px; padding: 9px 12px; border: 1px dashed var(--border2); background: transparent; color: var(--text2); border-radius: 9px; font: inherit; font-size: 13px; cursor: pointer; }
+.hs-join:hover { border-color: var(--accent); color: var(--accent-strong); }
 
 /* ── Icons (SVG, no emoji) ── */
 .icon { display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
