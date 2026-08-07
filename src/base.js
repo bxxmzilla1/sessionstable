@@ -124,6 +124,21 @@ export function defaultStore() {
   return { workspaces: [ws] }
 }
 
+// The "Container" text column (created by Sessions 4) always leads the sheet, so it's
+// the first column everywhere it renders. Reordering fields is safe — views, hidden
+// lists, and cells all reference field ids, never positions.
+function orderContainerFirst(table) {
+  if (!table || !Array.isArray(table.fields)) return table
+  const idx = table.fields.findIndex(
+    (f) => f && f.type === 'text' && String(f.name || '').trim().toLowerCase() === 'container'
+  )
+  if (idx <= 0) return table
+  const fields = [...table.fields]
+  const [container] = fields.splice(idx, 1)
+  fields.unshift(container)
+  return { ...table, fields }
+}
+
 /** Accept legacy single-base `{ tables }` or the new `{ workspaces }` shape. */
 export function normalizeStore(data) {
   // The VPN "send to phone" pointer is a top-level extra kept verbatim so it syncs
@@ -137,7 +152,7 @@ export function normalizeStore(data) {
         name: w.name || 'Untitled Workspace',
         color: typeof w.color === 'number' ? w.color : 0,
         openedAt: w.openedAt || new Date().toISOString(),
-        tables: Array.isArray(w.tables) && w.tables.length ? w.tables : [emptyTable()],
+        tables: (Array.isArray(w.tables) && w.tables.length ? w.tables : [emptyTable()]).map(orderContainerFirst),
         activeTableId: w.activeTableId || (w.tables && w.tables[0] && w.tables[0].id) || null,
       })),
     }
@@ -149,7 +164,7 @@ export function normalizeStore(data) {
         name: 'Untitled Workspace',
         color: 0,
         openedAt: new Date().toISOString(),
-        tables: data.tables,
+        tables: data.tables.map(orderContainerFirst),
         activeTableId: data.activeTableId || data.tables[0].id,
       }],
     }
