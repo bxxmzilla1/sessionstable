@@ -12,11 +12,12 @@ import RecordModal from './components/RecordModal'
 import SettingsModal from './components/SettingsModal'
 import { ShareModal, JoinModal } from './components/ShareModal'
 import VpnScreen from './components/VpnScreen'
+import ProxyGrabber from './components/ProxyGrabber'
 import FooterNav from './components/FooterNav'
 import Icon from './Icon'
 import { deleteBundleTeams } from './bundle'
 import {
-  displayValue, emptyTable, newField, newRecord, newView, newWorkspace,
+  displayValue, emptyTable, newField, newProxyList, newRecord, newView, newWorkspace,
   normalizeStore, uid, TEXT_FIELD_TYPES,
 } from './base'
 import { OPTION_PALETTE } from './constants'
@@ -88,6 +89,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [vpnOpen, setVpnOpen] = useState(false)
   const [vpnPreset, setVpnPreset] = useState(null)
+  const [proxyOpen, setProxyOpen] = useState(false)
   const [flash, setFlash] = useState('')
   // Workspace sharing: share rows visible to me (mine + ones I've joined), and the
   // sheet documents of owners who shared a workspace with me.
@@ -321,6 +323,27 @@ export default function App() {
     setFlash('Sent to VPN on your phone')
     setTimeout(() => setFlash(''), 1800)
   }, [update, activeWorkspaceId])
+
+  // ── Proxy Grabber: named pools of proxy links Sessions 4 grabs from ──
+  const createProxyList = useCallback((name) => {
+    const list = newProxyList(name)
+    update((s) => ({ ...s, proxyLists: [...(s.proxyLists || []), list] }))
+    return list.id
+  }, [update])
+
+  const renameProxyList = useCallback((id, name) => {
+    const clean = (name || '').trim()
+    if (!clean) return
+    update((s) => ({ ...s, proxyLists: (s.proxyLists || []).map((l) => (l.id === id ? { ...l, name: clean } : l)) }))
+  }, [update])
+
+  const deleteProxyList = useCallback((id) => {
+    update((s) => ({ ...s, proxyLists: (s.proxyLists || []).filter((l) => l.id !== id) }))
+  }, [update])
+
+  const setProxyListProxies = useCallback((id, proxies) => {
+    update((s) => ({ ...s, proxyLists: (s.proxyLists || []).map((l) => (l.id === id ? { ...l, proxies } : l)) }))
+  }, [update])
 
   // Receiving end: when the synced vpnTarget changes, a phone jumps straight to the VPN
   // screen with that row selected. Seeded on first load so a stale target never auto-opens.
@@ -663,6 +686,18 @@ export default function App() {
           <VpnScreen workspaces={allWorkspaces} preset={vpnPreset} onConsumePreset={() => setVpnPreset(null)} />
         </div>
       )}
+      {proxyOpen && (
+        <div className="vpn-overlay">
+          <button className="vpn-close" onClick={() => setProxyOpen(false)} title="Close"><Icon name="close" size={18} /></button>
+          <ProxyGrabber
+            lists={store?.proxyLists || []}
+            onCreate={createProxyList}
+            onRename={renameProxyList}
+            onDelete={deleteProxyList}
+            onSetProxies={setProxyListProxies}
+          />
+        </div>
+      )}
       {flash && <div className="st-toast">{flash}</div>}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {shareWsId && (
@@ -691,6 +726,7 @@ export default function App() {
           onShare={shareWorkspace}
           onJoin={() => setJoinOpen(true)}
           onSettings={() => setSettingsOpen(true)}
+          onProxy={() => setProxyOpen(true)}
         />
         {footer}
         {overlays}
@@ -731,6 +767,7 @@ export default function App() {
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}
         </span>
         <span className="email" title={session.user.email}>{session.user.email}</span>
+        <button className="btn ghost sm icon-txt" onClick={() => setProxyOpen(true)} title="Proxy Grabber"><Icon name="vpn" size={15} /><span className="hide-sm">Proxy Grabber</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => setSettingsOpen(true)} title="Settings"><Icon name="settings" size={15} /><span className="hide-sm">Settings</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => supabase.auth.signOut()} title="Sign out"><Icon name="signout" size={15} /><span className="hide-sm">Sign out</span></button>
       </header>

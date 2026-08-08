@@ -121,7 +121,36 @@ export function newWorkspace(name, { starter = false, color } = {}) {
 
 export function defaultStore() {
   const ws = newWorkspace('My Workspace', { starter: true, color: 0 })
-  return { workspaces: [ws] }
+  return { workspaces: [ws], proxyLists: [] }
+}
+
+// A "Proxy Grabber" list: a named pool of proxy links Sessions 4 grabs from when creating
+// containers. Lives at the top level of the account document so Sessions 4 reads/consumes it.
+export function newProxyList(name = 'Proxy list') {
+  return { id: uid('pxl'), name: String(name || 'Proxy list'), proxies: [] }
+}
+
+// Keep only non-empty, de-duplicated proxy lines (order preserved).
+export function cleanProxyLines(text) {
+  const seen = new Set()
+  const out = []
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line || seen.has(line)) continue
+    seen.add(line)
+    out.push(line)
+  }
+  return out
+}
+
+// Normalize the stored proxyLists array (defensive against older/partial docs).
+export function normalizeProxyLists(lists) {
+  if (!Array.isArray(lists)) return []
+  return lists.map((l) => ({
+    id: l && l.id ? l.id : uid('pxl'),
+    name: (l && l.name) ? String(l.name) : 'Proxy list',
+    proxies: Array.isArray(l && l.proxies) ? l.proxies.map((p) => String(p || '').trim()).filter(Boolean) : [],
+  }))
 }
 
 // The "Container" text column (created by Sessions 4) always leads the sheet, so it's
@@ -144,9 +173,12 @@ export function normalizeStore(data) {
   // The VPN "send to phone" pointer is a top-level extra kept verbatim so it syncs
   // from desktop to the phone through the same document.
   const vpnTarget = data && data.vpnTarget && typeof data.vpnTarget === 'object' ? data.vpnTarget : undefined
+  // Proxy Grabber lists are a top-level extra kept verbatim so they sync with Sessions 4.
+  const proxyLists = normalizeProxyLists(data && data.proxyLists)
   if (data && Array.isArray(data.workspaces) && data.workspaces.length) {
     return {
       vpnTarget,
+      proxyLists,
       workspaces: data.workspaces.map((w) => ({
         id: w.id || uid('ws'),
         name: w.name || 'Untitled Workspace',
@@ -159,6 +191,7 @@ export function normalizeStore(data) {
   }
   if (data && Array.isArray(data.tables) && data.tables.length) {
     return {
+      proxyLists,
       workspaces: [{
         id: uid('ws'),
         name: 'Untitled Workspace',
