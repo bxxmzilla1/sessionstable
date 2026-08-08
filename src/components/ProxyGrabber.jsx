@@ -9,6 +9,9 @@ export default function ProxyGrabber({ lists = [], onCreate, onRename, onDelete,
   const [selectedId, setSelectedId] = useState(lists[0]?.id || null)
   const [draft, setDraft] = useState('')
   const [renaming, setRenaming] = useState(false)
+  // In-app "name the new list" input (no browser prompt dialogs).
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
 
   const selected = useMemo(() => lists.find((l) => l.id === selectedId) || null, [lists, selectedId])
 
@@ -30,11 +33,18 @@ export default function ProxyGrabber({ lists = [], onCreate, onRename, onDelete,
     onSetProxies(selected.id, cleanProxyLines(draft))
   }
 
-  function createList() {
-    const name = (prompt('Name this proxy list', 'Proxy list') || '').trim()
-    if (!name) return
+  function startCreate() {
+    setNewName('')
+    setCreating(true)
+  }
+
+  function confirmCreate() {
+    const name = newName.trim()
+    if (!name) { setCreating(false); return }
     const id = onCreate(name)
     if (id) setSelectedId(id)
+    setCreating(false)
+    setNewName('')
   }
 
   const count = cleanProxyLines(draft).length
@@ -54,8 +64,27 @@ export default function ProxyGrabber({ lists = [], onCreate, onRename, onDelete,
           <aside className="pg-lists">
             <div className="pg-lists-head">
               <span>Lists</span>
-              <button className="pg-plus" title="New list" onClick={createList}>+</button>
+              <button className="pg-plus" title="New list" onClick={startCreate}>+</button>
             </div>
+            {creating && (
+              <div className="pg-new">
+                <input
+                  className="pg-new-input"
+                  autoFocus
+                  value={newName}
+                  placeholder="List name"
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') confirmCreate()
+                    else if (e.key === 'Escape') setCreating(false)
+                  }}
+                />
+                <div className="pg-new-actions">
+                  <button className="pg-new-ok" onClick={confirmCreate} disabled={!newName.trim()}>Create</button>
+                  <button className="pg-new-cancel" onClick={() => setCreating(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
             {lists.length ? (
               lists.map((l) => (
                 <button
@@ -70,7 +99,7 @@ export default function ProxyGrabber({ lists = [], onCreate, onRename, onDelete,
             ) : (
               <div className="pg-empty-lists">No lists yet.</div>
             )}
-            <button className="pg-create" onClick={createList}>+ New proxy list</button>
+            <button className="pg-create" onClick={startCreate}>+ New proxy list</button>
           </aside>
 
           <section className="pg-editor">
