@@ -1,6 +1,7 @@
 import Cell from './Cell'
 import Icon from '../Icon'
 import { FIELD_TYPE_MAP } from '../constants'
+import { displayValue, isReadOnlyField } from '../base'
 
 // Full-screen record editor (Airtable's "expand record").
 export default function RecordModal({ table, record, onCell, onAddOption, onDelete, onClose }) {
@@ -20,13 +21,19 @@ export default function RecordModal({ table, record, onCell, onAddOption, onDele
                 {f.name}
               </div>
               <div className="rm-field-value">
-                <Cell
-                  field={f}
-                  value={record.cells[f.id]}
-                  expanded
-                  onChange={(v) => onCell(record.id, f.id, v)}
-                  onAddOption={(nm) => onAddOption(f.id, nm)}
-                />
+                {isReadOnlyField(f) ? (
+                  <div className="gcell gcell-ro" title="Logged by Sessions 4 — deleted only with the row">
+                    {displayValue(f, record.cells[f.id])}
+                  </div>
+                ) : (
+                  <Cell
+                    field={f}
+                    value={record.cells[f.id]}
+                    expanded
+                    onChange={(v) => onCell(record.id, f.id, v)}
+                    onAddOption={(nm) => onAddOption(f.id, nm)}
+                  />
+                )}
               </div>
             </div>
           ))}

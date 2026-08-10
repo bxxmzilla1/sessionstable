@@ -17,7 +17,7 @@ import FooterNav from './components/FooterNav'
 import Icon from './Icon'
 import { deleteBundleTeams } from './bundle'
 import {
-  displayValue, emptyTable, newField, newProxyList, newRecord, newView, newWorkspace,
+  displayValue, emptyTable, isReadOnlyField, newField, newProxyList, newRecord, newView, newWorkspace,
   normalizeStore, uid, TEXT_FIELD_TYPES,
 } from './base'
 import { OPTION_PALETTE } from './constants'
@@ -674,7 +674,12 @@ export default function App() {
           const entries = Object.entries(cellsByName || {}).filter(([n, v]) => n && v !== '' && v != null)
           if (!entries.length) return
           const cellObj = {}
-          for (const [name, value] of entries) cellObj[fieldFor(name).id] = value
+          // Timestamp columns are never paste targets — Sessions 4 owns those values.
+          for (const [name, value] of entries) {
+            if (isReadOnlyField({ name })) continue
+            cellObj[fieldFor(name).id] = value
+          }
+          if (!Object.keys(cellObj).length) return
           if (i < targets.length) {
             const rec = byId.get(targets[i])
             if (rec) Object.assign(rec.cells, cellObj)
@@ -704,7 +709,7 @@ export default function App() {
           line.forEach((val, j) => {
             const fid = orderedFieldIds[colStart + j]
             const f = fid ? fieldById.get(fid) : null
-            if (!f || !TEXT_FIELD_TYPES.includes(f.type)) return
+            if (!f || !TEXT_FIELD_TYPES.includes(f.type) || isReadOnlyField(f)) return
             rec.cells[fid] = val
           })
         })

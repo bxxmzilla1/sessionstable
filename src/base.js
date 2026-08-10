@@ -13,6 +13,12 @@ export const WORKSPACE_COLORS = [
   { bg: '#cffafe', accent: '#0891b2' },
 ]
 
+// Timestamp columns Sessions 4 stamps automatically ("Creation Date & Time" on first XSave,
+// "Posted Date & Time" on first Post). Display-only in the app: not clickable, not editable,
+// never a paste target — they only go away when the whole row is deleted.
+const READONLY_FIELD_NAMES = ['creation date & time', 'posted date & time']
+export const isReadOnlyField = (f) => READONLY_FIELD_NAMES.includes(String(f?.name || '').trim().toLowerCase())
+
 export function newField(name, type, extra = {}) {
   const f = { id: uid('fld'), name, type, ...extra }
   if (SELECT_TYPES.includes(type) && !f.options) f.options = []

@@ -259,6 +259,9 @@ body {
 .atable tbody .rownum.selectable { cursor: pointer; user-select: none; }
 .atable tbody .rownum.selectable:hover { background: var(--surface3, #eceafd); }
 
+/* Sessions 4 timestamp cells (Creation / Posted Date & Time): display-only */
+.gcell-ro { cursor: default; user-select: none; color: var(--text2); }
+
 /* Row selection (click the number column) */
 .atable tbody tr.row-sel td { background: rgba(124, 108, 255, 0.10); }
 .atable tbody tr.row-sel .rownum { background: rgba(124, 108, 255, 0.22); color: var(--accent-strong); font-weight: 600; }

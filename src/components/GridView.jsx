@@ -3,7 +3,7 @@ import Cell, { isTwoFactorField } from './Cell'
 import FieldMenu from './FieldMenu'
 import Icon from '../Icon'
 import { FIELD_TYPE_MAP, optionColor } from '../constants'
-import { displayValue, emptyValueFor, TEXT_FIELD_TYPES } from '../base'
+import { displayValue, emptyValueFor, isReadOnlyField, TEXT_FIELD_TYPES } from '../base'
 
 const isProxyField = (f) => f.type === 'text' && String(f.name || '').trim().toLowerCase() === 'proxy'
 
@@ -162,6 +162,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
         const keys = []
         for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++) {
           for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
+            if (isReadOnlyField(visibleFields[c])) continue // timestamp columns stay untouchable
             keys.push(keyOf(orderedRecords[r].id, visibleFields[c].id))
           }
         }
@@ -255,7 +256,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
         const fieldById = new Map(table.fields.map((f) => [f.id, f]))
         const entries = sel.keys
           .map((k) => { const [recordId, fieldId] = k.split('|'); return { recordId, fieldId } })
-          .filter(({ fieldId }) => { const f = fieldById.get(fieldId); return f && isTextyField(f) })
+          .filter(({ fieldId }) => { const f = fieldById.get(fieldId); return f && isTextyField(f) && !isReadOnlyField(f) })
           .map((c) => ({ ...c, value: grid[0][0] }))
         api.setCellsBulk(table.id, entries)
         return
@@ -284,7 +285,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
           const entries = sel.keys.map((k) => {
             const [recordId, fieldId] = k.split('|')
             const f = fieldById.get(fieldId)
-            return f ? { recordId, fieldId, value: emptyValueFor(f.type) } : null
+            return f && !isReadOnlyField(f) ? { recordId, fieldId, value: emptyValueFor(f.type) } : null
           }).filter(Boolean)
           api.setCellsBulk(table.id, entries)
         }
@@ -293,7 +294,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
       if (e.key === 'Enter' && sel.kind === 'cell' && sel.keys.length === 1) {
         const [recordId, fieldId] = sel.keys[0].split('|')
         const f = table.fields.find((x) => x.id === fieldId)
-        if (f && isTextyField(f)) { e.preventDefault(); setEditing({ recordId, fieldId }) }
+        if (f && isTextyField(f) && !isReadOnlyField(f)) { e.preventDefault(); setEditing({ recordId, fieldId }) }
       }
     }
 
@@ -343,6 +344,10 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
   }
 
   const renderCell = (f, rec) => {
+    // Sessions 4 timestamp columns are display-only: no select, no edit, no handlers at all.
+    if (isReadOnlyField(f)) {
+      return <div className="gcell gcell-ro" title="Logged by Sessions 4 — deleted only with the row">{displayValue(f, rec.cells[f.id])}</div>
+    }
     if (isTextyField(f)) return renderTexty(f, rec)
     return (
       <div onClick={() => { if (sel) setSel(null) }}>
