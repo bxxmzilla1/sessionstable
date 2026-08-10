@@ -287,6 +287,74 @@ export default function App() {
     }))
   }, [mutateWorkspace])
 
+  // ── Undo / redo (Ctrl+Z / Ctrl+Shift+Z) ──
+  // Every DATA edit (cells, rows, columns) captures a before/after snapshot of the table
+  // it touched. Undo walks back through those snapshots, redo replays them. View config
+  // (sort/filter/hide) is intentionally not tracked. History resets per workspace.
+  const history = useRef({ undo: [], redo: [] })
+  const histToken = useRef(0)
+  const histPushed = useRef(0)
+  useEffect(() => { history.current = { undo: [], redo: [] } }, [activeWorkspaceId])
+
+  const snapTable = (t) => structuredClone({ fields: t.fields, records: t.records, primaryFieldId: t.primaryFieldId })
+
+  const mutateTableTracked = useCallback((tableId, fn) => {
+    const token = ++histToken.current
+    mutateTable(tableId, (t) => {
+      const next = fn(t)
+      // histPushed guards against React double-invoking the updater (StrictMode).
+      if (next !== t && histPushed.current !== token) {
+        histPushed.current = token
+        history.current.undo.push({ tableId, before: snapTable(t), after: snapTable(next) })
+        if (history.current.undo.length > 100) history.current.undo.shift()
+        history.current.redo = []
+      }
+      return next
+    })
+  }, [mutateTable])
+
+  const applySnapshot = useCallback((tableId, snap) => {
+    mutateTable(tableId, (t) => ({
+      ...t,
+      fields: structuredClone(snap.fields),
+      records: structuredClone(snap.records),
+      primaryFieldId: snap.primaryFieldId,
+    }))
+  }, [mutateTable])
+
+  const undoEdit = useCallback(() => {
+    const entry = history.current.undo.pop()
+    if (!entry) { setFlash('Nothing to undo'); setTimeout(() => setFlash(''), 1200); return }
+    history.current.redo.push(entry)
+    applySnapshot(entry.tableId, entry.before)
+    setFlash('Undone')
+    setTimeout(() => setFlash(''), 1200)
+  }, [applySnapshot])
+
+  const redoEdit = useCallback(() => {
+    const entry = history.current.redo.pop()
+    if (!entry) { setFlash('Nothing to redo'); setTimeout(() => setFlash(''), 1200); return }
+    history.current.undo.push(entry)
+    applySnapshot(entry.tableId, entry.after)
+    setFlash('Redone')
+    setTimeout(() => setFlash(''), 1200)
+  }, [applySnapshot])
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+      if (e.key !== 'z' && e.key !== 'Z') return
+      const el = document.activeElement
+      // Inside an input the browser's own text undo should win.
+      if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return
+      e.preventDefault()
+      if (e.shiftKey) redoEdit()
+      else undoEdit()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [undoEdit, redoEdit])
+
   const openWorkspace = useCallback((id) => {
     setSearch('')
     setExpandedId(null)
@@ -508,10 +576,10 @@ export default function App() {
     },
 
     addField(tableId, patch) {
-      mutateTable(tableId, (t) => ({ ...t, fields: [...t.fields, newField(patch.name, patch.type, patch.options ? { options: patch.options } : {})] }))
+      mutateTableTracked(tableId, (t) => ({ ...t, fields: [...t.fields, newField(patch.name, patch.type, patch.options ? { options: patch.options } : {})] }))
     },
     updateField(tableId, fieldId, patch) {
-      mutateTable(tableId, (t) => ({
+      mutateTableTracked(tableId, (t) => ({
         ...t,
         fields: t.fields.map((f) => {
           if (f.id !== fieldId) return f
@@ -524,7 +592,7 @@ export default function App() {
       }))
     },
     deleteField(tableId, fieldId) {
-      mutateTable(tableId, (t) => {
+      mutateTableTracked(tableId, (t) => {
         if (t.fields.length <= 1) return t
         const fields = t.fields.filter((f) => f.id !== fieldId)
         const primaryFieldId = t.primaryFieldId === fieldId ? fields[0].id : t.primaryFieldId
@@ -540,7 +608,7 @@ export default function App() {
     },
     addSelectOption(tableId, fieldId, name) {
       const id = uid('opt')
-      mutateTable(tableId, (t) => ({
+      mutateTableTracked(tableId, (t) => ({
         ...t,
         fields: t.fields.map((f) => {
           if (f.id !== fieldId) return f
@@ -551,12 +619,12 @@ export default function App() {
       return id
     },
 
-    addRecord(tableId, preset = {}) { mutateTable(tableId, (t) => ({ ...t, records: [...t.records, newRecord({ ...preset })] })) },
+    addRecord(tableId, preset = {}) { mutateTableTracked(tableId, (t) => ({ ...t, records: [...t.records, newRecord({ ...preset })] })) },
     updateCell(tableId, recordId, fieldId, value) {
-      mutateTable(tableId, (t) => ({ ...t, records: t.records.map((r) => (r.id === recordId ? { ...r, cells: { ...r.cells, [fieldId]: value } } : r)) }))
+      mutateTableTracked(tableId, (t) => ({ ...t, records: t.records.map((r) => (r.id === recordId ? { ...r, cells: { ...r.cells, [fieldId]: value } } : r)) }))
     },
     deleteRecord(tableId, recordId) {
-      mutateTable(tableId, (t) => {
+      mutateTableTracked(tableId, (t) => {
         const rec = t.records.find((r) => r.id === recordId)
         if (rec?.launch?.token) deleteLaunchTokens([rec.launch.token])
         return { ...t, records: t.records.filter((r) => r.id !== recordId) }
@@ -565,7 +633,7 @@ export default function App() {
     // Set many cells at once: entries = [{ recordId, fieldId, value }].
     setCellsBulk(tableId, entries) {
       if (!entries || !entries.length) return
-      mutateTable(tableId, (t) => {
+      mutateTableTracked(tableId, (t) => {
         const patch = new Map()
         for (const { recordId, fieldId, value } of entries) {
           if (!patch.has(recordId)) patch.set(recordId, {})
@@ -580,7 +648,7 @@ export default function App() {
     deleteRecords(tableId, recordIds) {
       const gone = new Set(recordIds || [])
       if (!gone.size) return
-      mutateTable(tableId, (t) => {
+      mutateTableTracked(tableId, (t) => {
         const tokens = t.records.filter((r) => gone.has(r.id) && r.launch?.token).map((r) => r.launch.token)
         if (tokens.length) deleteLaunchTokens(tokens)
         return { ...t, records: t.records.filter((r) => !gone.has(r.id)) }
@@ -591,7 +659,7 @@ export default function App() {
     // names missing in this sheet are created as text so nothing is lost.
     pasteRows(tableId, startRecordId, rows, orderedIds) {
       if (!rows || !rows.length) return
-      mutateTable(tableId, (t) => {
+      mutateTableTracked(tableId, (t) => {
         const fields = [...t.fields]
         const fieldFor = (name) => {
           let f = fields.find((x) => String(x.name || '').trim().toLowerCase() === String(name).trim().toLowerCase())
@@ -622,7 +690,7 @@ export default function App() {
     // Non-text columns in the way are skipped (position is consumed, value dropped).
     pasteGrid(tableId, startRecordId, startFieldId, grid, orderedIds, orderedFieldIds) {
       if (!grid || !grid.length) return
-      mutateTable(tableId, (t) => {
+      mutateTableTracked(tableId, (t) => {
         const colStart = orderedFieldIds.indexOf(startFieldId)
         if (colStart < 0) return t
         const fieldById = new Map(t.fields.map((f) => [f.id, f]))
@@ -643,7 +711,7 @@ export default function App() {
         return { ...t, records }
       })
     },
-  }), [mutateWorkspace, mutateTable, deleteLaunchTokens])
+  }), [mutateWorkspace, mutateTable, mutateTableTracked, deleteLaunchTokens])
 
   // My own workspaces plus every workspace shared with me, as one list. Shared ones
   // carry `_shared` so the UI can badge them and route deletes to "leave".

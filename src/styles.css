@@ -282,6 +282,21 @@ body {
 .addfield-btn:hover { background: var(--surface3); color: var(--accent-strong); }
 .acell { background: var(--surface); height: 40px; padding: 0; vertical-align: middle; }
 .acell.type-number .cell-input, .acell .num { text-align: right; }
+/* Collapsible row groups (Airtable "group by") */
+.grp-row { cursor: pointer; user-select: none; }
+.grp-cell { background: var(--surface2); padding: 7px 10px; border-bottom: 1px solid var(--border); }
+/* Keep the label in view when the sheet scrolls sideways. */
+.grp-inner { display: inline-flex; align-items: center; position: sticky; left: 10px; }
+.grp-row:hover .grp-cell { background: var(--surface3, #eceafd); }
+.grp-chevron { display: inline-flex; margin-right: 8px; color: var(--muted); transform: rotate(-90deg); transition: transform .15s; }
+.grp-chevron.open { transform: rotate(0deg); }
+.grp-field { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
+.grp-tag { font-size: 12.5px; }
+.grp-label { font-size: 13px; font-weight: 700; color: var(--text); }
+.grp-count { margin-left: 10px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.grp-addrow .addrow-btn, .grp-addrow .addrow-text { height: 34px; padding-top: 6px; padding-bottom: 6px; }
+.grp-addrow td { border-bottom: 1px solid var(--border); }
+
 .addrow td { background: var(--surface); border-bottom: none; }
 .addrow-btn { width: 100%; height: 40px; border: none; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; }
 .addrow-btn:hover { color: var(--accent-strong); background: var(--surface3); }

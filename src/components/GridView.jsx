@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import Cell, { isTwoFactorField } from './Cell'
 import FieldMenu from './FieldMenu'
 import Icon from '../Icon'
-import { FIELD_TYPE_MAP } from '../constants'
+import { FIELD_TYPE_MAP, OPTION_PALETTE } from '../constants'
 import { displayValue, emptyValueFor, TEXT_FIELD_TYPES } from '../base'
 
 const isProxyField = (f) => f.type === 'text' && String(f.name || '').trim().toLowerCase() === 'proxy'
@@ -24,6 +24,69 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
   const [editing, setEditing] = useState(null) // {recordId, fieldId}
   const [dragW, setDragW] = useState(null) // live column-resize preview: { fieldId, width }
   const visibleFields = table.fields.filter((f) => !view.hidden.includes(f.id))
+
+  // ── Collapsible groups (Airtable "group by") ──
+  // When the view has a groupField, rows are bucketed by that column's value and each
+  // bucket renders under a clickable header that expands/collapses it. Collapsed keys
+  // are remembered per view in localStorage (a device preference, not sheet data).
+  const groupField = view.groupField ? table.fields.find((f) => f.id === view.groupField) : null
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('st_grp_' + view.id) || '[]')) } catch (e) { return new Set() }
+  })
+  useEffect(() => {
+    try { setCollapsed(new Set(JSON.parse(localStorage.getItem('st_grp_' + view.id) || '[]'))) } catch (e) { setCollapsed(new Set()) }
+  }, [view.id])
+  const toggleGroup = (key) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      try { localStorage.setItem('st_grp_' + view.id, JSON.stringify([...next])) } catch (e) {}
+      return next
+    })
+  }
+
+  // groups: [{ key, label, chip: {bg,text}|null, sample, records }] — null when not grouping.
+  const groups = (() => {
+    if (!groupField) return null
+    const map = new Map()
+    for (const rec of records) {
+      const v = rec.cells[groupField.id]
+      let key, label, chip = null, sample = v
+      if (groupField.type === 'singleSelect') {
+        const opt = (groupField.options || []).find((o) => o.id === v)
+        key = opt ? opt.id : ''
+        label = opt ? opt.name : 'Empty'
+        if (opt) chip = OPTION_PALETTE[opt.color % OPTION_PALETTE.length]
+        sample = opt ? opt.id : ''
+      } else {
+        const dv = displayValue(groupField, v).trim()
+        key = dv.toLowerCase()
+        label = dv || 'Empty'
+      }
+      if (!map.has(key)) map.set(key, { key, label, chip, sample, records: [] })
+      map.get(key).records.push(rec)
+    }
+    let list = [...map.values()]
+    if (groupField.type === 'singleSelect') {
+      const pos = new Map((groupField.options || []).map((o, i) => [o.id, i]))
+      list.sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : (pos.get(a.key) ?? 0) - (pos.get(b.key) ?? 0)))
+    } else {
+      list.sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : a.label.localeCompare(b.label)))
+    }
+    return list
+  })()
+
+  // Visible order for everything index-based (row numbers, shift ranges, paste-down):
+  // grouped order when grouping, otherwise the processed records as-is.
+  const orderedRecords = groups ? groups.flatMap((g) => g.records) : records
+
+  // New row inside a group: pre-fill the grouping column so it lands in that bucket.
+  const addToGroup = (g) => {
+    const preset = {}
+    if (g.sample !== '' && g.sample != null) preset[groupField.id] = g.sample
+    api.addRecord(table.id, preset)
+  }
 
   const widthOf = (f) => (dragW?.fieldId === f.id ? dragW.width : f.width)
   const colStyle = (f) => {
@@ -54,7 +117,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
     window.addEventListener('mouseup', up)
   }
 
-  const rowIndex = (rid) => records.findIndex((r) => r.id === rid)
+  const rowIndex = (rid) => orderedRecords.findIndex((r) => r.id === rid)
   const colIndex = (fid) => visibleFields.findIndex((f) => f.id === fid)
 
   // Drop selected records that disappeared (deleted, filtered away, sheet switched).
@@ -75,7 +138,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
       const b = rowIndex(recId)
       if (a >= 0 && b >= 0) {
         const [lo, hi] = a <= b ? [a, b] : [b, a]
-        setSel({ kind: 'row', ids: records.slice(lo, hi + 1).map((r) => r.id), anchor: sel.anchor })
+        setSel({ kind: 'row', ids: orderedRecords.slice(lo, hi + 1).map((r) => r.id), anchor: sel.anchor })
         return
       }
     }
@@ -99,7 +162,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
         const keys = []
         for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++) {
           for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
-            keys.push(keyOf(records[r].id, visibleFields[c].id))
+            keys.push(keyOf(orderedRecords[r].id, visibleFields[c].id))
           }
         }
         setSel({ kind: 'cell', keys, anchor: sel.anchor })
@@ -139,7 +202,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
       if (isFormEl(document.activeElement)) return
       e.preventDefault()
       if (sel.kind === 'row') {
-        const chosen = records.filter((r) => sel.ids.includes(r.id))
+        const chosen = orderedRecords.filter((r) => sel.ids.includes(r.id))
         // In-app clipboard keyed by column name so rows can be pasted into other tab sheets.
         const rows = chosen.map((rec) => {
           const cells = {}
@@ -172,7 +235,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
     const onPaste = (e) => {
       if (isFormEl(document.activeElement)) return
       e.preventDefault()
-      const orderedIds = records.map((r) => r.id)
+      const orderedIds = orderedRecords.map((r) => r.id)
       if (sel.kind === 'row') {
         if (clipboard.current?.kind === 'rows' && clipboard.current.rows?.length) {
           // Start at the topmost selected row; overwrite downward, append leftovers.
@@ -242,7 +305,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
       document.removeEventListener('paste', onPaste)
       document.removeEventListener('keydown', onKey)
     }
-  }, [sel, editing, records, table, api, clipboard]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sel, editing, records, view, table, api, clipboard]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderTexty = (f, rec) => {
     const isEditing = editing && editing.recordId === rec.id && editing.fieldId === f.id
@@ -295,6 +358,52 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
 
   const cellSelected = (rid, fid) => sel?.kind === 'cell' && sel.keys.includes(keyOf(rid, fid))
 
+  const renderDataRow = (rec, num) => {
+    const rowSel = sel?.kind === 'row' && sel.ids.includes(rec.id)
+    return (
+      <tr key={rec.id} className={rowSel ? 'row-sel' : undefined}>
+        <td
+          className="rownum selectable"
+          title="Select row (Ctrl+click to multi-select, Shift+click for a range)"
+          onClick={(e) => clickRow(e, rec.id)}
+        >
+          <span className="rn">{num}</span>
+          {rec.launch?.token && (
+            <button
+              className="launch-link-btn"
+              title="Launch this container in Sessions 4"
+              onClick={(e) => {
+                e.stopPropagation()
+                window.location.href = `sessions://open/${encodeURIComponent(rec.launch.token)}`
+              }}
+            >
+              <Icon name="rocket" size={13} />
+            </button>
+          )}
+        </td>
+        {visibleFields.map((f) => (
+          <td key={f.id} className={'acell type-' + f.type + (cellSelected(rec.id, f.id) ? ' acell-sel' : '')}>
+            {isProxyField(f) && onVpnSend && String(rec.cells[f.id] || '').trim() ? (
+              <div className="proxy-cell">
+                <div className="proxy-cell-input">{renderCell(f, rec)}</div>
+                <button
+                  className="proxy-vpn-btn"
+                  title="Send this proxy to the VPN screen on your phone"
+                  onClick={(e) => { e.stopPropagation(); onVpnSend(rec.id) }}
+                >
+                  <Icon name="phone" size={13} />
+                </button>
+              </div>
+            ) : (
+              renderCell(f, rec)
+            )}
+          </td>
+        ))}
+        <td className="addfield" />
+      </tr>
+    )
+  }
+
   return (
     <div className="grid-view">
       <table className="atable">
@@ -331,51 +440,42 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
           </tr>
         </thead>
         <tbody>
-          {records.map((rec, i) => {
-            const rowSel = sel?.kind === 'row' && sel.ids.includes(rec.id)
-            return (
-              <tr key={rec.id} className={rowSel ? 'row-sel' : undefined}>
-                <td
-                  className="rownum selectable"
-                  title="Select row (Ctrl+click to multi-select, Shift+click for a range)"
-                  onClick={(e) => clickRow(e, rec.id)}
-                >
-                  <span className="rn">{i + 1}</span>
-                  {rec.launch?.token && (
-                    <button
-                      className="launch-link-btn"
-                      title="Launch this container in Sessions 4"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        window.location.href = `sessions://open/${encodeURIComponent(rec.launch.token)}`
-                      }}
-                    >
-                      <Icon name="rocket" size={13} />
-                    </button>
+          {groups ? (
+            groups.map((g) => {
+              const isOpen = !collapsed.has(g.key)
+              return (
+                <Fragment key={g.key || '__empty__'}>
+                  <tr className="grp-row" onClick={() => toggleGroup(g.key)} title={isOpen ? 'Collapse group' : 'Expand group'}>
+                    <td colSpan={visibleFields.length + 2} className="grp-cell">
+                      <span className="grp-inner">
+                        <span className={'grp-chevron' + (isOpen ? ' open' : '')}><Icon name="chevronDown" size={14} /></span>
+                        <span className="grp-field">{groupField.name}</span>
+                        {g.chip ? (
+                          <span className="tag grp-tag" style={{ background: g.chip.bg, color: g.chip.text }}>{g.label}</span>
+                        ) : (
+                          <span className="grp-label">{g.label}</span>
+                        )}
+                        <span className="grp-count">{g.records.length}</span>
+                      </span>
+                    </td>
+                  </tr>
+                  {isOpen && g.records.map((rec, i) => renderDataRow(rec, i + 1))}
+                  {isOpen && (
+                    <tr className="addrow grp-addrow">
+                      <td className="rownum">
+                        <button className="addrow-btn" onClick={() => addToGroup(g)} title="Add record to this group">+</button>
+                      </td>
+                      <td colSpan={visibleFields.length + 1} className="addrow-cell">
+                        <button className="addrow-text" onClick={() => addToGroup(g)}>+</button>
+                      </td>
+                    </tr>
                   )}
-                </td>
-                {visibleFields.map((f) => (
-                  <td key={f.id} className={'acell type-' + f.type + (cellSelected(rec.id, f.id) ? ' acell-sel' : '')}>
-                    {isProxyField(f) && onVpnSend && String(rec.cells[f.id] || '').trim() ? (
-                      <div className="proxy-cell">
-                        <div className="proxy-cell-input">{renderCell(f, rec)}</div>
-                        <button
-                          className="proxy-vpn-btn"
-                          title="Send this proxy to the VPN screen on your phone"
-                          onClick={(e) => { e.stopPropagation(); onVpnSend(rec.id) }}
-                        >
-                          <Icon name="phone" size={13} />
-                        </button>
-                      </div>
-                    ) : (
-                      renderCell(f, rec)
-                    )}
-                  </td>
-                ))}
-                <td className="addfield" />
-              </tr>
-            )
-          })}
+                </Fragment>
+              )
+            })
+          ) : (
+            records.map((rec, i) => renderDataRow(rec, i + 1))
+          )}
           <tr className="addrow">
             <td className="rownum">
               <button className="addrow-btn" onClick={() => api.addRecord(table.id)} title="Add record">+</button>

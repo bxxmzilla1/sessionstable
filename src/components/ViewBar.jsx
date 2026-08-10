@@ -31,17 +31,23 @@ export default function ViewBar({ table, view, api, search, onSearch, sidebarOpe
       </div>
 
       <div className="vb-right">
-        {view.type === 'kanban' && (
+        {(view.type === 'kanban' || view.type === 'grid') && (
           <div className="vb-menu">
-            <button className={'vb-btn' + (view.groupField ? ' active' : '')} onClick={() => toggle('group')}>Group</button>
+            <button className={'vb-btn' + (view.groupField ? ' active' : '')} onClick={() => toggle('group')}>
+              Group{view.type === 'grid' && view.groupField ? ' (1)' : ''}
+            </button>
             {open === 'group' && (
               <Popover onClose={close}>
-                <div className="pop-label">Stack by</div>
-                {fields.filter((f) => f.type === 'singleSelect').map((f) => (
+                <div className="pop-label">{view.type === 'kanban' ? 'Stack by' : 'Group by'}</div>
+                {view.type === 'grid' && (
+                  <button className={'pop-item' + (!view.groupField ? ' on' : '')}
+                    onClick={() => { api.updateView(table.id, view.id, { groupField: null }); close() }}>None</button>
+                )}
+                {(view.type === 'kanban' ? fields.filter((f) => f.type === 'singleSelect') : fields).map((f) => (
                   <button key={f.id} className={'pop-item' + (view.groupField === f.id ? ' on' : '')}
                     onClick={() => { api.updateView(table.id, view.id, { groupField: f.id }); close() }}>{f.name}</button>
                 ))}
-                {!fields.some((f) => f.type === 'singleSelect') && <div className="pop-empty">No single-select fields</div>}
+                {view.type === 'kanban' && !fields.some((f) => f.type === 'singleSelect') && <div className="pop-empty">No single-select fields</div>}
               </Popover>
             )}
           </div>
