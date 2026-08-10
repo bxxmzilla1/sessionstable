@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { OPTION_PALETTE } from '../constants'
+import { optionColor } from '../constants'
 import { totp, isValidSecret, secondsRemaining, TOTP_STEP } from '../totp'
 import Icon from '../Icon'
 
@@ -94,7 +94,7 @@ function TotpCell({ value, onChange }) {
 }
 
 function Tag({ option, onRemove }) {
-  const c = OPTION_PALETTE[option.color % OPTION_PALETTE.length]
+  const c = optionColor(option)
   return (
     <span className="tag" style={{ background: c.bg, color: c.text }}>
       {option.name}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { OPTION_PALETTE } from '../constants'
+import { optionColor } from '../constants'
 import { displayValue } from '../base'
 
 // Groups records into stacks by a single-select field. Cards drag between stacks.
@@ -42,7 +42,7 @@ export default function KanbanView({ table, view, records, api, onExpand }) {
     <div className="kanban">
       {stacks.map((stack) => {
         const cards = records.filter((r) => (r.cells[groupField.id] || null) === stack.id)
-        const c = stack.color != null ? OPTION_PALETTE[stack.color % OPTION_PALETTE.length] : null
+        const c = stack.color != null ? optionColor(stack) : null
         return (
           <div className="kstack" key={String(stack.id)}
             onDragOver={(e) => e.preventDefault()} onDrop={() => drop(stack.id)}>

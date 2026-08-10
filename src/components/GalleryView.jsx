@@ -1,4 +1,4 @@
-import { OPTION_PALETTE } from '../constants'
+import { optionColor } from '../constants'
 import { displayValue } from '../base'
 import Icon from '../Icon'
 
@@ -23,7 +23,7 @@ export default function GalleryView({ table, view, records, api, onExpand }) {
                     <span className="gc-label">{f.name}</span>
                     <span className="tags">
                       {chosen.map((o) => {
-                        const c = OPTION_PALETTE[o.color % OPTION_PALETTE.length]
+                        const c = optionColor(o)
                         return <span className="tag" key={o.id} style={{ background: c.bg, color: c.text }}>{o.name}</span>
                       })}
                     </span>

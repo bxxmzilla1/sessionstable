@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import Cell, { isTwoFactorField } from './Cell'
 import FieldMenu from './FieldMenu'
 import Icon from '../Icon'
-import { FIELD_TYPE_MAP, OPTION_PALETTE } from '../constants'
+import { FIELD_TYPE_MAP, optionColor } from '../constants'
 import { displayValue, emptyValueFor, TEXT_FIELD_TYPES } from '../base'
 
 const isProxyField = (f) => f.type === 'text' && String(f.name || '').trim().toLowerCase() === 'proxy'
@@ -57,7 +57,7 @@ export default function GridView({ table, view, records, api, clipboard, onVpnSe
         const opt = (groupField.options || []).find((o) => o.id === v)
         key = opt ? opt.id : ''
         label = opt ? opt.name : 'Empty'
-        if (opt) chip = OPTION_PALETTE[opt.color % OPTION_PALETTE.length]
+        if (opt) chip = optionColor(opt)
         sample = opt ? opt.id : ''
       } else {
         const dv = displayValue(groupField, v).trim()

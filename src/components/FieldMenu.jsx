@@ -58,6 +58,18 @@ export default function FieldMenu({ field, onSave, onDelete, onClose }) {
                   <button key={i} className={'fm-color' + (o.color === i ? ' on' : '')}
                     style={{ background: c.bg }} onClick={() => updateOption(o.id, { color: i })} title={c.name} />
                 ))}
+                {/* Color wheel: pick any hue — stored as '#rrggbb' instead of a palette index. */}
+                <label
+                  className={'fm-color fm-color-wheel' + (typeof o.color === 'string' ? ' on' : '')}
+                  style={typeof o.color === 'string' ? { background: o.color } : undefined}
+                  title="Custom color"
+                >
+                  <input
+                    type="color"
+                    value={typeof o.color === 'string' ? o.color : '#7c3aed'}
+                    onChange={(e) => updateOption(o.id, { color: e.target.value })}
+                  />
+                </label>
               </div>
               <input className="fm-option-name" value={o.name} onChange={(e) => updateOption(o.id, { name: e.target.value })} />
               <button className="fm-option-x" onClick={() => removeOption(o.id)}><Icon name="close" size={13} /></button>
