@@ -30,38 +30,20 @@ export const OPTION_PALETTE = [
   { name: 'gray', bg: '#eef0f4', text: '#4b5563' },
 ]
 
-function hexToHsl(hex) {
-  let h = String(hex).replace('#', '')
-  if (h.length === 3) h = h.split('').map((x) => x + x).join('')
-  const r = parseInt(h.slice(0, 2), 16) / 255
-  const g = parseInt(h.slice(2, 4), 16) / 255
-  const b = parseInt(h.slice(4, 6), 16) / 255
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const l = (max + min) / 2
-  const d = max - min
-  let hue = 0
-  let sat = 0
-  if (d) {
-    sat = d / (1 - Math.abs(2 * l - 1))
-    if (max === r) hue = ((g - b) / d) % 6
-    else if (max === g) hue = (b - r) / d + 2
-    else hue = (r - g) / d + 4
-    hue *= 60
-    if (hue < 0) hue += 360
-  }
-  return { h: Math.round(hue), s: Math.round(sat * 100), l: Math.round(l * 100) }
-}
-
 // Resolve an option's chip colors. `color` is either a palette index (number) or a custom
-// '#rrggbb' picked with the color wheel — custom hues get the same Airtable treatment as
-// the palette: a light tint background with darker readable text of the same hue.
+// '#rrggbb' picked with the color wheel. A custom pick is used as the chip BACKGROUND
+// exactly as chosen, and the text auto-adapts for contrast: white on dark colors,
+// near-black on bright ones (perceived-brightness / YIQ formula).
 export function optionColor(option) {
   const c = option?.color
   if (typeof c === 'string' && c.startsWith('#')) {
-    const { h, s } = hexToHsl(c)
-    const sat = Math.min(s, 85)
-    return { name: 'custom', bg: `hsl(${h}, ${sat}%, 91%)`, text: `hsl(${h}, ${sat}%, 30%)` }
+    let h = c.slice(1)
+    if (h.length === 3) h = h.split('').map((x) => x + x).join('')
+    const r = parseInt(h.slice(0, 2), 16) || 0
+    const g = parseInt(h.slice(2, 4), 16) || 0
+    const b = parseInt(h.slice(4, 6), 16) || 0
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000 // 0 (black) … 255 (white)
+    return { name: 'custom', bg: c, text: brightness >= 140 ? '#1f2430' : '#ffffff' }
   }
   return OPTION_PALETTE[(Number(c) || 0) % OPTION_PALETTE.length]
 }
