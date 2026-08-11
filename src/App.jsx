@@ -928,6 +928,13 @@ export default function App() {
   // the active tab overridden by this device's pick.
   const base = { ...workspace, activeTableId: table.id }
 
+  // "Total Accounts" — rows in this tab sheet whose "Creation Date & Time" is stamped
+  // (i.e. accounts Sessions 4 actually saved with XSave). Hidden until the column exists.
+  const creationField = table.fields.find((f) => String(f.name || '').trim().toLowerCase() === 'creation date & time')
+  const totalAccounts = creationField
+    ? table.records.filter((r) => String(r.cells?.[creationField.id] ?? '').trim() !== '').length
+    : 0
+
   return (
     <div className="app has-footer">
       <header className="topbar">
@@ -939,6 +946,11 @@ export default function App() {
             <span className="ws-shared-badge">{workspace._shared ? 'Shared with you' : 'Shared'}</span>
           )}
         </div>
+        {creationField && (
+          <span className="total-accounts" title="Rows in this tab sheet with a Creation Date & Time stamp">
+            Total Accounts: <b>{totalAccounts}</b>
+          </span>
+        )}
         <div className="grow" />
         <span className={'save ' + status}>
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}
