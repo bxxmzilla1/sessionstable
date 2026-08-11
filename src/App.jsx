@@ -11,6 +11,7 @@ import GalleryView from './components/GalleryView'
 import RecordModal from './components/RecordModal'
 import SettingsModal from './components/SettingsModal'
 import { ShareModal, JoinModal } from './components/ShareModal'
+import ConfirmModal from './components/ConfirmModal'
 import VpnScreen from './components/VpnScreen'
 import ProxyGrabber from './components/ProxyGrabber'
 import FooterNav from './components/FooterNav'
@@ -97,6 +98,7 @@ export default function App() {
   const [foreignDocs, setForeignDocs] = useState({}) // ownerId -> normalized store
   const [shareWsId, setShareWsId] = useState(null) // workspace whose share modal is open
   const [joinOpen, setJoinOpen] = useState(false)
+  const [confirmBox, setConfirmBox] = useState(null) // { title, message, confirmLabel, onConfirm }
   const sharesRef = useRef([])
   const sharesJson = useRef(null)
   const foreignDocsRef = useRef({})
@@ -291,6 +293,9 @@ export default function App() {
   // Every DATA edit (cells, rows, columns) captures a before/after snapshot of the table
   // it touched. Undo walks back through those snapshots, redo replays them. View config
   // (sort/filter/hide) is intentionally not tracked. History resets per workspace.
+  // Besides plain table edits, entries can carry a `kind`:
+  //   'ws-delete' — a whole workspace was deleted (undo re-inserts it at its old position)
+  //   'ws-tables' — a tab sheet was deleted (undo restores the workspace's table list)
   const history = useRef({ undo: [], redo: [] })
   const histToken = useRef(0)
   const histPushed = useRef(0)
@@ -322,23 +327,51 @@ export default function App() {
     }))
   }, [mutateTable])
 
+  // Restore a workspace's whole table list (used by tab-sheet deletion undo/redo).
+  // Routes to the owner's document when the workspace is shared with me.
+  const applyWsTables = useCallback((wsId, snap) => {
+    const fn = (w) => ({ ...w, tables: structuredClone(snap.tables), activeTableId: snap.activeTableId })
+    const foreign = foreignShareFor(wsId)
+    if (foreign) { mutateForeignWs(foreign.owner_id, wsId, fn); return }
+    update((s) => ({ ...s, workspaces: s.workspaces.map((w) => (w.id === wsId ? fn(w) : w)) }))
+  }, [foreignShareFor, mutateForeignWs, update])
+
+  // Put a deleted workspace back where it was (share codes and cloud launch links
+  // are NOT recreated — only the workspace data itself comes back).
+  const reinsertWorkspace = useCallback((entry) => {
+    update((s) => {
+      if (s.workspaces.some((w) => w.id === entry.workspace.id)) return s
+      const workspaces = [...s.workspaces]
+      workspaces.splice(Math.min(entry.index, workspaces.length), 0, structuredClone(entry.workspace))
+      return { ...s, workspaces }
+    })
+  }, [update])
+
+  const removeWorkspaceById = useCallback((id) => {
+    update((s) => ({ ...s, workspaces: s.workspaces.filter((w) => w.id !== id) }))
+  }, [update])
+
   const undoEdit = useCallback(() => {
     const entry = history.current.undo.pop()
     if (!entry) { setFlash('Nothing to undo'); setTimeout(() => setFlash(''), 1200); return }
     history.current.redo.push(entry)
-    applySnapshot(entry.tableId, entry.before)
-    setFlash('Undone')
+    if (entry.kind === 'ws-delete') reinsertWorkspace(entry)
+    else if (entry.kind === 'ws-tables') applyWsTables(entry.wsId, entry.before)
+    else applySnapshot(entry.tableId, entry.before)
+    setFlash(entry.kind === 'ws-delete' ? 'Workspace restored' : entry.kind === 'ws-tables' ? 'Tab sheet restored' : 'Undone')
     setTimeout(() => setFlash(''), 1200)
-  }, [applySnapshot])
+  }, [applySnapshot, applyWsTables, reinsertWorkspace])
 
   const redoEdit = useCallback(() => {
     const entry = history.current.redo.pop()
     if (!entry) { setFlash('Nothing to redo'); setTimeout(() => setFlash(''), 1200); return }
     history.current.undo.push(entry)
-    applySnapshot(entry.tableId, entry.after)
+    if (entry.kind === 'ws-delete') removeWorkspaceById(entry.workspace.id)
+    else if (entry.kind === 'ws-tables') applyWsTables(entry.wsId, entry.after)
+    else applySnapshot(entry.tableId, entry.after)
     setFlash('Redone')
     setTimeout(() => setFlash(''), 1200)
-  }, [applySnapshot])
+  }, [applySnapshot, applyWsTables, removeWorkspaceById])
 
   useEffect(() => {
     const onKey = (e) => {
@@ -470,9 +503,19 @@ export default function App() {
       sharesJson.current = null
       setShares((prev) => prev.filter((r) => r.id !== mine.id))
     }
+    const token = ++histToken.current
     update((s) => {
-      const gone = s.workspaces.find((w) => w.id === id)
-      if (gone) deleteLaunchTokens((gone.tables || []).flatMap((t) => (t.records || []).map((r) => r.launch?.token)))
+      const index = s.workspaces.findIndex((w) => w.id === id)
+      if (index < 0) return s
+      const gone = s.workspaces[index]
+      deleteLaunchTokens((gone.tables || []).flatMap((t) => (t.records || []).map((r) => r.launch?.token)))
+      // Ctrl+Z can bring the workspace back (data only — share codes / launch links stay gone).
+      if (histPushed.current !== token) {
+        histPushed.current = token
+        history.current.undo.push({ kind: 'ws-delete', index, workspace: structuredClone(gone) })
+        if (history.current.undo.length > 100) history.current.undo.shift()
+        history.current.redo = []
+      }
       const workspaces = s.workspaces.filter((w) => w.id !== id)
       return { ...s, workspaces }
     })
@@ -536,12 +579,27 @@ export default function App() {
     },
     renameTable(id, name) { mutateTable(id, (t) => ({ ...t, name: (name || '').trim() || t.name })) },
     deleteTable(id) {
+      const token = ++histToken.current
       mutateWorkspace((w) => {
         if (w.tables.length <= 1) return w
         const gone = w.tables.find((t) => t.id === id)
-        if (gone) deleteLaunchTokens((gone.records || []).map((r) => r.launch?.token))
+        if (!gone) return w
+        deleteLaunchTokens((gone.records || []).map((r) => r.launch?.token))
         const tables = w.tables.filter((t) => t.id !== id)
-        return { ...w, tables, activeTableId: w.activeTableId === id ? tables[0].id : w.activeTableId }
+        const next = { ...w, tables, activeTableId: w.activeTableId === id ? tables[0].id : w.activeTableId }
+        // Ctrl+Z restores the tab sheet (rows included; cloud launch links stay gone).
+        if (histPushed.current !== token) {
+          histPushed.current = token
+          history.current.undo.push({
+            kind: 'ws-tables',
+            wsId: w.id,
+            before: structuredClone({ tables: w.tables, activeTableId: w.activeTableId }),
+            after: structuredClone({ tables: next.tables, activeTableId: next.activeTableId }),
+          })
+          if (history.current.undo.length > 100) history.current.undo.shift()
+          history.current.redo = []
+        }
+        return next
       })
     },
     setActiveTable(id) { mutateWorkspace((w) => ({ ...w, activeTableId: id })) },
@@ -782,6 +840,15 @@ export default function App() {
         />
       )}
       {joinOpen && <JoinModal onJoin={joinWorkspace} onClose={() => setJoinOpen(false)} />}
+      {confirmBox && (
+        <ConfirmModal
+          title={confirmBox.title}
+          message={confirmBox.message}
+          confirmLabel={confirmBox.confirmLabel}
+          onConfirm={confirmBox.onConfirm}
+          onClose={() => setConfirmBox(null)}
+        />
+      )}
     </>
   )
 
@@ -795,7 +862,18 @@ export default function App() {
           onOpen={openWorkspace}
           onCreate={createWorkspace}
           onRename={renameWorkspace}
-          onDelete={deleteWorkspace}
+          onDelete={(id) => {
+            const w = allWorkspaces.find((x) => x.id === id)
+            const shared = !!w?._shared
+            setConfirmBox({
+              title: shared ? 'Leave shared workspace?' : 'Delete workspace?',
+              message: shared
+                ? `“${w?.name || 'This workspace'}” will disappear from your list. The owner keeps it and can share it with you again.`
+                : `“${w?.name || 'This workspace'}” and all its tab sheets and rows will be deleted. Press Ctrl+Z right after if it was a mistake.`,
+              confirmLabel: shared ? 'Leave' : 'Delete',
+              onConfirm: () => deleteWorkspace(id),
+            })
+          }}
           onShare={shareWorkspace}
           onJoin={() => setJoinOpen(true)}
           onSettings={() => setSettingsOpen(true)}
@@ -845,7 +923,22 @@ export default function App() {
         <button className="btn ghost sm icon-txt" onClick={() => supabase.auth.signOut()} title="Sign out"><Icon name="signout" size={15} /><span className="hide-sm">Sign out</span></button>
       </header>
 
-      <TableTabs base={base} api={api} />
+      <TableTabs
+        base={base}
+        api={{
+          ...api,
+          // Intercept tab-sheet deletion with a confirmation before the real delete runs.
+          deleteTable: (id) => {
+            const t = workspace.tables.find((x) => x.id === id)
+            setConfirmBox({
+              title: 'Delete tab sheet?',
+              message: `“${t?.name || 'This tab sheet'}” and all its rows will be deleted. Press Ctrl+Z right after if it was a mistake.`,
+              confirmLabel: 'Delete',
+              onConfirm: () => api.deleteTable(id),
+            })
+          },
+        }}
+      />
       <ViewBar table={table} view={view} api={api} search={search} onSearch={setSearch}
         sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((s) => !s)} />
 
