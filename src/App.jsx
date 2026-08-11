@@ -148,6 +148,23 @@ export default function App() {
     } catch (e) {}
   }, [session])
 
+  // The active tab sheet is a PER-DEVICE choice. The synced document also carries an
+  // activeTableId, but any remote write (Sessions 4 stamping a timestamp, the phone
+  // sitting on another tab) used to yank this device over to that tab. The local pick
+  // wins; the synced value is only a fallback for workspaces never opened here.
+  const [localTabs, setLocalTabs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('st_tabs') || '{}') || {} } catch (e) { return {} }
+  })
+  const rememberTab = useCallback((wsId, tableId) => {
+    if (!wsId || !tableId) return
+    setLocalTabs((prev) => {
+      if (prev[wsId] === tableId) return prev
+      const next = { ...prev, [wsId]: tableId }
+      try { localStorage.setItem('st_tabs', JSON.stringify(next)) } catch (e) {}
+      return next
+    })
+  }, [])
+
   useEffect(() => { sharesRef.current = shares }, [shares])
   useEffect(() => { foreignDocsRef.current = foreignDocs }, [foreignDocs])
 
@@ -574,6 +591,7 @@ export default function App() {
       mutateWorkspace((w) => {
         const t = emptyTable('Table ' + (w.tables.length + 1))
         // emptyTable already has Name/Notes — rename for clarity
+        rememberTab(w.id, t.id)
         return { ...w, tables: [...w.tables, t], activeTableId: t.id }
       })
     },
@@ -602,7 +620,10 @@ export default function App() {
         return next
       })
     },
-    setActiveTable(id) { mutateWorkspace((w) => ({ ...w, activeTableId: id })) },
+    setActiveTable(id) {
+      rememberTab(activeWorkspaceId, id)
+      mutateWorkspace((w) => ({ ...w, activeTableId: id }))
+    },
 
     addView(tableId, type) {
       mutateTable(tableId, (t) => {
@@ -774,7 +795,7 @@ export default function App() {
         return { ...t, records }
       })
     },
-  }), [mutateWorkspace, mutateTable, mutateTableTracked, deleteLaunchTokens])
+  }), [mutateWorkspace, mutateTable, mutateTableTracked, deleteLaunchTokens, rememberTab, activeWorkspaceId])
 
   // My own workspaces plus every workspace shared with me, as one list. Shared ones
   // carry `_shared` so the UI can badge them and route deletes to "leave".
@@ -894,13 +915,18 @@ export default function App() {
     )
   }
 
-  const table = workspace.tables.find((t) => t.id === workspace.activeTableId) || workspace.tables[0]
+  // This device's remembered tab wins; the synced activeTableId (which other devices
+  // and Sessions 4 writes move around) is only the fallback for never-opened workspaces.
+  const localTab = localTabs[workspace.id]
+  const activeTid = localTab && workspace.tables.some((t) => t.id === localTab) ? localTab : workspace.activeTableId
+  const table = workspace.tables.find((t) => t.id === activeTid) || workspace.tables[0]
   const view = table.views.find((v) => v.id === table.activeViewId) || table.views[0]
   const records = processRecords(table, view, search)
   const expanded = expandedId ? table.records.find((r) => r.id === expandedId) : null
 
-  // TableTabs expects `{ tables, activeTableId }` — the workspace itself matches that shape.
-  const base = workspace
+  // TableTabs expects `{ tables, activeTableId }` — same shape as the workspace, with
+  // the active tab overridden by this device's pick.
+  const base = { ...workspace, activeTableId: table.id }
 
   return (
     <div className="app has-footer">
