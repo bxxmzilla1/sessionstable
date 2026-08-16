@@ -878,6 +878,29 @@ body {
   border: 1px solid var(--border2); border-radius: 8px;
 }
 
+/* AI click editor row (Click / Sniper Click nodes) — full-width row above Start from node */
+.actl-ai-row {
+  flex-basis: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 8px; margin-bottom: 2px;
+  border-bottom: 1px dashed var(--border2);
+}
+.actl-ai-input {
+  flex: 1; min-width: 220px;
+  font: inherit; font-size: 12.5px; padding: 6px 10px;
+  background: var(--surface2, var(--surface)); color: var(--text);
+  border: 1px solid var(--border2); border-radius: 8px;
+}
+.actl-ai-input:focus { outline: none; border-color: var(--accent-light); }
+
+/* AI description line on Click / Sniper Click node cards */
+.actl-node-ai {
+  margin-top: 4px; font-size: 9.5px; line-height: 1.25;
+  color: var(--text3, var(--text2)); opacity: 0.75;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.actl-node-ai.set { color: var(--accent-light); opacity: 1; }
+
 /* Shot check decision modal */
 .actl-shot-modal {
   position: fixed; inset: 0; z-index: 80;

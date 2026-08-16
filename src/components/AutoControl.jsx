@@ -49,6 +49,8 @@ export default function AutoControl({ userId }) {
   const [missing, setMissing] = useState(false)  // tables not created yet
   const [selectedNode, setSelectedNode] = useState(null) // node picked for Start from node
   const [startEngine, setStartEngine] = useState('')     // engine code picked for it
+  const [aiDraft, setAiDraft] = useState('')             // AI click description being edited
+  const [aiSaving, setAiSaving] = useState(false)
   const graphStamp = useRef(null)
   const flashTimer = useRef(null)
   const seenManual = useRef(new Set()) // manual screenshots already auto-opened
@@ -236,6 +238,30 @@ export default function AutoControl({ userId }) {
       : 'XRestart sent — the PC relaunches and re-runs the preset')
   }, [userId, say])
 
+  // ── AI click (Claude) per node ──
+  // Click / Sniper Click nodes carry an optional `step.aiDesc`: on the PCs, Claude
+  // reads a browser screenshot and clicks the described target. Editing it here
+  // writes the published graph back to `auto_control`; engines fetch that graph
+  // fresh at the start of every run, so the next Execute uses the new description.
+  const saveAiDesc = useCallback(async () => {
+    if (!selectedNode || !graph) return
+    const trimmed = aiDraft.trim()
+    const next = {
+      ...graph,
+      nodes: (graph.nodes || []).map((n) =>
+        n.id === selectedNode ? { ...n, step: { ...(n.step || {}), aiDesc: trimmed } } : n),
+    }
+    setAiSaving(true)
+    // Bumping updated_at makes every device's poll refetch the edited graph.
+    const { error } = await supabase.from('auto_control')
+      .update({ graph: next, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+    setAiSaving(false)
+    if (error) { console.error(error); say('Could not save the AI click description'); return }
+    setGraph(next)
+    say(trimmed ? 'AI click saved — the PCs use it on their next run' : 'AI click cleared')
+  }, [selectedNode, graph, aiDraft, userId, say])
+
   // ── Graph geometry ──
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : []
   const edges = Array.isArray(graph?.edges) ? graph.edges : []
@@ -299,6 +325,34 @@ export default function AutoControl({ userId }) {
 
       {selectedNode && nodes.some((n) => n.id === selectedNode) && (
         <div className="actl-startbar">
+          {(() => {
+            const sel = nodes.find((n) => n.id === selectedNode)
+            const act = sel?.step?.action
+            if (act !== 'click' && act !== 'sniper') return null
+            const saved = String(sel?.step?.aiDesc || '').trim()
+            return (
+              <div className="actl-ai-row">
+                <span className="actl-startbar-label"><b>AI click</b> (Claude)</span>
+                <input
+                  className="actl-ai-input"
+                  type="text"
+                  value={aiDraft}
+                  onChange={(ev) => setAiDraft(ev.target.value)}
+                  onKeyDown={(ev) => { if (ev.key === 'Enter') saveAiDesc() }}
+                  placeholder='Describe what Claude should click, e.g. the "Next" button — empty = off'
+                  title="On each PC, Claude looks at a screenshot of the browser (Instagram signup context) and clicks the described element. Click node: used when the selector fails or is empty. Sniper Click: tried first, recorded clicks are the fallback."
+                />
+                <button
+                  className="btn primary sm"
+                  disabled={aiSaving || aiDraft.trim() === saved}
+                  onClick={saveAiDesc}
+                  title="Save the description into the published graph — every PC uses it on its next run"
+                >
+                  {aiSaving ? 'Saving…' : 'Save AI click'}
+                </button>
+              </div>
+            )
+          })()}
           <span className="actl-startbar-label">
             Start from <b>{nodeLabel(nodes.find((n) => n.id === selectedNode))}</b> on
           </span>
@@ -510,8 +564,13 @@ export default function AutoControl({ userId }) {
                     key={n.id}
                     className={'actl-node' + (live.length ? ' live' : '') + (pct >= 100 ? ' complete' : '') + (selectedNode === n.id ? ' selected' : '')}
                     style={{ left: p.x, top: p.y, width: NODE_W, minHeight: NODE_H }}
-                    onClick={(ev) => { ev.stopPropagation(); setSelectedNode((prev) => (prev === n.id ? null : n.id)) }}
-                    title="Click to select this node for Start from node"
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      const next = selectedNode === n.id ? null : n.id
+                      setSelectedNode(next)
+                      setAiDraft(next ? String(n.step?.aiDesc || '') : '')
+                    }}
+                    title="Click to select this node — Start from node, and for Click / Sniper Click nodes edit the AI click"
                   >
                     <div className="actl-node-head">
                       <span className="actl-node-label" title={nodeLabel(n)}>{nodeLabel(n)}</span>
@@ -526,6 +585,14 @@ export default function AutoControl({ userId }) {
                         ? <>{chips.map((c) => <span key={c} className="actl-chip" title={`Performed by ${c}`}>{c}</span>)}{extra > 0 && <span className="actl-chip more">+{extra}</span>}</>
                         : <span className="actl-node-none">no PC yet</span>}
                     </div>
+                    {(n.step?.action === 'click' || n.step?.action === 'sniper') && (
+                      <div
+                        className={'actl-node-ai' + (String(n.step?.aiDesc || '').trim() ? ' set' : '')}
+                        title={String(n.step?.aiDesc || '').trim() || 'Select the node to fill in an AI click description'}
+                      >
+                        {String(n.step?.aiDesc || '').trim() ? <>AI: “{String(n.step.aiDesc).trim()}”</> : 'AI click: not set'}
+                      </div>
+                    )}
                   </div>
                 )
               })}
