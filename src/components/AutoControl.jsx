@@ -89,10 +89,20 @@ export default function AutoControl({ userId }) {
   }, [userId])
 
   const isOnline = (e) => now - new Date(e.last_seen || 0).getTime() < ONLINE_MS
-  const online = engines.filter(isOnline)
+  // One row per engine code: a crash/kill can leave a stale row from an older boot
+  // behind (the app deletes its own leftovers when it comes back, but until then —
+  // and for engines that never return — the freshest heartbeat wins here).
+  const byCode = new Map()
+  for (const e of engines) {
+    const key = String(e.code || e.id)
+    const prev = byCode.get(key)
+    if (!prev || new Date(e.last_seen || 0) > new Date(prev.last_seen || 0)) byCode.set(key, e)
+  }
+  const engineList = [...byCode.values()]
+  const online = engineList.filter(isOnline)
   const runId = String(control?.run_id || '')
   const targets = Array.isArray(control?.targets) ? control.targets.map(String) : []
-  const participants = engines.filter((e) => runId && String(e.run_id) === runId)
+  const participants = engineList.filter((e) => runId && String(e.run_id) === runId)
   // Denominator for the bars: the engines this run targets that are online now
   // (an explicit target list wins; empty list = every online engine).
   const targetedOnline = targets.length ? online.filter((e) => targets.includes(String(e.code))) : online
@@ -178,13 +188,13 @@ export default function AutoControl({ userId }) {
           <div className="actl-engines-head">
             Sessions 4 PCs <span className="actl-count">{online.length} online</span>
           </div>
-          {!engines.length && (
+          {!engineList.length && (
             <div className="actl-engines-empty">
               No PCs seen yet. Open Sessions 4 (signed in to this account) and its engine
               code appears here within a second.
             </div>
           )}
-          {engines.map((e) => {
+          {engineList.map((e) => {
             const st = engineStatus(e)
             const on = isOnline(e)
             return (
