@@ -776,9 +776,12 @@ body {
 /* ── Auto Control (multi-PC node-graph execution) ── */
 .actl { height: 100%; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
 .actl-head {
-  flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+  /* Extra right padding keeps the buttons clear of the overlay's fixed "X". */
+  flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 14px 62px 14px 18px;
   background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm);
 }
+.actl-head .btn { flex-shrink: 0; white-space: nowrap; }
+.actl-title { flex-shrink: 0; }
 .actl-title { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; color: var(--accent-strong); }
 .actl-sub { font-size: 12.5px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .actl-sub b { color: var(--text); }
@@ -806,7 +809,9 @@ body {
 .actl-engine-status.off { color: var(--muted); }
 
 /* Graph pane */
-.actl-graph-wrap { flex: 1; overflow: auto; position: relative; background: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 26px 26px; }
+.actl-graph-wrap { flex: 1; overflow: auto; position: relative; background: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 26px 26px; cursor: grab; }
+.actl-graph-wrap.panning { cursor: grabbing; user-select: none; }
+.actl-graph-wrap.panning * { cursor: grabbing; }
 .actl-graph { position: relative; }
 .actl-wires { position: absolute; inset: 0; pointer-events: none; }
 .actl-wire { fill: none; stroke: var(--accent-light); stroke-width: 2; opacity: 0.65; }

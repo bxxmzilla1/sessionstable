@@ -47,6 +47,33 @@ export default function AutoControl({ userId }) {
   const [missing, setMissing] = useState(false)  // tables not created yet
   const graphStamp = useRef(null)
   const flashTimer = useRef(null)
+  const graphWrapRef = useRef(null)
+  const panRef = useRef(null)
+
+  // Click-and-drag panning of the graph pane (drag anywhere — the pane scrolls
+  // with the pointer, like grabbing the canvas in the Sessions 4 Auto window).
+  const onPanDown = useCallback((e) => {
+    if (e.button !== 0) return
+    const el = graphWrapRef.current
+    if (!el) return
+    panRef.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop }
+    el.classList.add('panning')
+    e.preventDefault()
+    const move = (ev) => {
+      const p = panRef.current
+      if (!p) return
+      el.scrollLeft = p.left - (ev.clientX - p.x)
+      el.scrollTop = p.top - (ev.clientY - p.y)
+    }
+    const up = () => {
+      panRef.current = null
+      el.classList.remove('panning')
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }, [])
 
   const say = useCallback((msg) => {
     setFlash(msg)
@@ -226,7 +253,7 @@ export default function AutoControl({ userId }) {
           })}
         </div>
 
-        <div className="actl-graph-wrap">
+        <div className="actl-graph-wrap" ref={graphWrapRef} onMouseDown={onPanDown}>
           {!nodes.length ? (
             <div className="actl-empty">
               No graph published yet. In Sessions 4, open <b>Auto</b>, build your nodes and
