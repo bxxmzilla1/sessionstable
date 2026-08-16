@@ -51,6 +51,7 @@ export default function AutoControl({ userId }) {
   const [startEngine, setStartEngine] = useState('')     // engine code picked for it
   const [aiDraft, setAiDraft] = useState('')             // AI click description being edited
   const [aiSaving, setAiSaving] = useState(false)
+  const [nickEdit, setNickEdit] = useState(null)         // { id, value } — engine being renamed
   const graphStamp = useRef(null)
   const flashTimer = useRef(null)
   const seenManual = useRef(new Set()) // manual screenshots already auto-opened
@@ -186,7 +187,9 @@ export default function AutoControl({ userId }) {
     const { error } = await supabase.from('auto_control').update(patch).eq('user_id', userId)
     if (error) { console.error(error); say('Could not send the command'); return }
     setControl((prev) => (prev ? { ...prev, ...patch } : prev))
-    say(command.startsWith('run:@')
+    say(command.startsWith('nick:')
+      ? `Nickname sent to ${cmdTargets?.join(', ') || 'PC'} — it shows up within a second`
+      : command.startsWith('run:@')
       ? `Starting from the selected node on ${cmdTargets?.join(', ') || 'PC'}…`
       : command === 'run'
       ? (cmdTargets?.length ? `Executing on ${cmdTargets.join(', ')}…` : `Executing on ${online.length} online PC${online.length === 1 ? '' : 's'}…`)
@@ -197,6 +200,17 @@ export default function AutoControl({ userId }) {
       : command === 'reset' ? 'Progress reset — bars cleared and every PC stopped'
       : cmdTargets?.length ? `Stop sent to ${cmdTargets.join(', ')}` : 'Stop sent to every PC')
   }, [control, userId, online.length, say])
+
+  // Rename an engine: the nickname travels as a targeted command; the engine saves
+  // it locally (its top-left badge and title update live) and its next heartbeat
+  // carries it back here. Only online engines can receive it.
+  const saveNick = useCallback(async (e) => {
+    if (!nickEdit || nickEdit.id !== e.id) return
+    const val = String(nickEdit.value || '').trim().slice(0, 24)
+    setNickEdit(null)
+    if (val === String(e.nickname || '').trim()) return
+    await sendCommand('nick:' + encodeURIComponent(val), [String(e.code)])
+  }, [nickEdit, sendCommand])
 
   // A badge's prompt can vanish while open (its engine stopped and cancelled it,
   // or another device decided) — close the stale viewer. On-demand screenshots
@@ -449,7 +463,34 @@ export default function AutoControl({ userId }) {
                 <span className={'actl-dot ' + (on ? 'on' : 'off')} />
                 <div className="actl-engine-main">
                   <span className="actl-engine-code">{e.code || '——————'}</span>
-                  <span className="actl-engine-name" title={e.name}>{e.name || 'PC'}</span>
+                  {nickEdit?.id === e.id ? (
+                    <input
+                      className="actl-nick-input"
+                      autoFocus
+                      maxLength={24}
+                      placeholder="Nickname"
+                      value={nickEdit.value}
+                      onChange={(ev) => setNickEdit({ id: e.id, value: ev.target.value })}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter') { ev.preventDefault(); saveNick(e) }
+                        else if (ev.key === 'Escape') { ev.preventDefault(); setNickEdit(null) }
+                      }}
+                      onBlur={() => saveNick(e)}
+                    />
+                  ) : (
+                    <span className="actl-engine-name" title={e.nickname ? `${e.nickname} — ${e.name || 'PC'}` : e.name}>
+                      {e.nickname || e.name || 'PC'}
+                      {on && (
+                        <button
+                          className="actl-nick-edit"
+                          title="Rename this engine — the nickname also shows in its window's top-left corner"
+                          onClick={(ev) => { ev.stopPropagation(); setNickEdit({ id: e.id, value: String(e.nickname || '') }) }}
+                        >
+                          ✎
+                        </button>
+                      )}
+                    </span>
+                  )}
                   <span className={'actl-engine-status ' + st.cls} title={statusText}>{statusText}</span>
                 </div>
                 {pendingShot ? (

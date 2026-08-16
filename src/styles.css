@@ -878,6 +878,19 @@ body {
   border: 1px solid var(--border2); border-radius: 8px;
 }
 
+/* Engine rename (nickname) — inline editor in the engine row */
+.actl-nick-edit {
+  margin-left: 5px; padding: 0 3px; border: none; background: none; cursor: pointer;
+  font-size: 11px; color: var(--text2); opacity: 0; transition: opacity .12s, color .12s;
+}
+.actl-engine:hover .actl-nick-edit { opacity: 0.85; }
+.actl-nick-edit:hover { color: var(--accent-light); opacity: 1; }
+.actl-nick-input {
+  width: 120px; font: inherit; font-size: 12px; padding: 2px 8px;
+  background: var(--surface2, var(--surface)); color: var(--text);
+  border: 1px solid var(--accent-light); border-radius: 7px; outline: none;
+}
+
 /* AI click editor row (Click / Sniper Click nodes) — full-width row above Start from node */
 .actl-ai-row {
   flex-basis: 100%;

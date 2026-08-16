@@ -200,6 +200,7 @@ create table if not exists public.auto_engines (
   user_id    uuid not null references auth.users (id) on delete cascade,
   code       text not null default '',       -- stable engine code shown in the PWA
   name       text not null default '',       -- PC hostname
+  nickname   text not null default '',       -- user-set label (editable from the PWA)
   status     text not null default 'idle',   -- idle | running | done | error
   run_id     text not null default '',
   node_id    text not null default '',       -- node currently executing
@@ -208,6 +209,9 @@ create table if not exists public.auto_engines (
   last_seen  timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+
+-- Existing databases: add the nickname column introduced later.
+alter table public.auto_engines add column if not exists nickname text not null default '';
 
 create index if not exists auto_engines_user_id_idx on public.auto_engines (user_id);
 
