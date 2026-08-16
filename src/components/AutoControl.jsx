@@ -131,6 +131,18 @@ export default function AutoControl({ userId }) {
     return () => { stopped = true; clearInterval(id) }
   }, [userId])
 
+  // Safety net: decided rows are normally deleted by their engine within seconds;
+  // if a PC went away before consuming its decision, clear those leftovers here.
+  useEffect(() => {
+    if (!userId) return
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    supabase.from('auto_shots')
+      .delete().eq('user_id', userId)
+      .neq('decision', '').neq('decision', 'view')
+      .lt('decided_at', cutoff)
+      .then(() => {}, () => {})
+  }, [userId])
+
   const isOnline = (e) => now - new Date(e.last_seen || 0).getTime() < ONLINE_MS
   // One row per engine code: a crash/kill can leave a stale row from an older boot
   // behind (the app deletes its own leftovers when it comes back, but until then —
@@ -205,10 +217,11 @@ export default function AutoControl({ userId }) {
   }, [userId])
 
   // Write the decision back; the Sessions 4 instance polls it within ~1.5s and
-  // deletes the row once consumed.
+  // deletes the row once consumed. The screenshot itself is wiped right here —
+  // the engine only needs the decision, so the image never lingers in the DB.
   const decideShot = useCallback(async (shotId, decision) => {
     const { error } = await supabase.from('auto_shots')
-      .update({ decision, decided_at: new Date().toISOString() })
+      .update({ decision, shot: '', decided_at: new Date().toISOString() })
       .eq('id', shotId).eq('user_id', userId)
     if (error) { console.error(error); say('Could not send the decision'); return }
     setShots((prev) => prev.filter((s) => s.id !== shotId))
