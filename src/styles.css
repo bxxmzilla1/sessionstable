@@ -859,6 +859,25 @@ body {
 .actl-engine-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .actl-engine-btns .btn { width: 100%; white-space: nowrap; }
 
+/* Start from node: selected node + floating action bar */
+.actl-node { cursor: pointer; }
+.actl-node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,58,237,0.28); }
+.actl-startbar {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 40px); padding: 10px 14px;
+  background: var(--surface); border: 1.5px solid var(--accent-light); border-radius: 14px;
+  box-shadow: 0 12px 36px rgba(124, 58, 237, 0.25);
+  animation: actl-shot-in .2s ease;
+}
+.actl-startbar-label { font-size: 12.5px; color: var(--text2); white-space: nowrap; }
+.actl-startbar-label b { color: var(--text); }
+.actl-startbar-select {
+  font: inherit; font-size: 12.5px; padding: 6px 8px; max-width: 220px;
+  background: var(--surface2, var(--surface)); color: var(--text);
+  border: 1px solid var(--border2); border-radius: 8px;
+}
+
 /* Shot check decision modal */
 .actl-shot-modal {
   position: fixed; inset: 0; z-index: 80;

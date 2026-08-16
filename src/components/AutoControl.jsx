@@ -47,6 +47,8 @@ export default function AutoControl({ userId }) {
   const [now, setNow] = useState(() => Date.now())
   const [flash, setFlash] = useState('')
   const [missing, setMissing] = useState(false)  // tables not created yet
+  const [selectedNode, setSelectedNode] = useState(null) // node picked for Start from node
+  const [startEngine, setStartEngine] = useState('')     // engine code picked for it
   const graphStamp = useRef(null)
   const flashTimer = useRef(null)
   const seenManual = useRef(new Set()) // manual screenshots already auto-opened
@@ -176,12 +178,15 @@ export default function AutoControl({ userId }) {
           command_at: new Date().toISOString(),
           // 'xrestart' = Execute on one engine: it relaunches with a fresh
           // container and runs the published graph under this new run id.
-          ...(command === 'run' || command === 'xrestart' ? { run_id: newRunId() } : {}),
+          // 'run:@<nodeId>' = Start from node — a run beginning at that node.
+          ...(command === 'run' || command.startsWith('run:@') || command === 'xrestart' ? { run_id: newRunId() } : {}),
         }
     const { error } = await supabase.from('auto_control').update(patch).eq('user_id', userId)
     if (error) { console.error(error); say('Could not send the command'); return }
     setControl((prev) => (prev ? { ...prev, ...patch } : prev))
-    say(command === 'run'
+    say(command.startsWith('run:@')
+      ? `Starting from the selected node on ${cmdTargets?.join(', ') || 'PC'}…`
+      : command === 'run'
       ? (cmdTargets?.length ? `Executing on ${cmdTargets.join(', ')}…` : `Executing on ${online.length} online PC${online.length === 1 ? '' : 's'}…`)
       : command === 'xrestart' ? `XRestart sent to ${cmdTargets?.join(', ') || 'PC'} — it relaunches and runs the preset…`
       : command === 'shot' ? `Screenshot requested from ${cmdTargets?.join(', ') || 'PC'} — it opens here in a moment…`
@@ -289,6 +294,37 @@ export default function AutoControl({ userId }) {
       {missing && (
         <div className="actl-empty">
           The Auto Control tables are missing — run the updated <b>sessions-table/supabase.sql</b> in the Supabase SQL editor first.
+        </div>
+      )}
+
+      {selectedNode && nodes.some((n) => n.id === selectedNode) && (
+        <div className="actl-startbar">
+          <span className="actl-startbar-label">
+            Start from <b>{nodeLabel(nodes.find((n) => n.id === selectedNode))}</b> on
+          </span>
+          <select
+            className="actl-startbar-select"
+            value={startEngine || (online[0] ? String(online[0].code) : '')}
+            onChange={(ev) => setStartEngine(ev.target.value)}
+          >
+            {online.length
+              ? online.map((o) => <option key={o.id} value={String(o.code)}>{o.code} — {o.name || 'PC'}</option>)
+              : <option value="">no PC online</option>}
+          </select>
+          <button
+            className="btn primary sm"
+            disabled={!online.length}
+            onClick={() => {
+              const code = startEngine || (online[0] ? String(online[0].code) : '')
+              if (!code) return
+              sendCommand(`run:@${selectedNode}`, [code])
+              setSelectedNode(null)
+            }}
+            title="Run the published graph on the chosen PC starting from the selected node"
+          >
+            Start from node
+          </button>
+          <button className="btn ghost sm" onClick={() => setSelectedNode(null)} title="Clear the node selection">✕</button>
         </div>
       )}
 
@@ -472,8 +508,10 @@ export default function AutoControl({ userId }) {
                 return (
                   <div
                     key={n.id}
-                    className={'actl-node' + (live.length ? ' live' : '') + (pct >= 100 ? ' complete' : '')}
+                    className={'actl-node' + (live.length ? ' live' : '') + (pct >= 100 ? ' complete' : '') + (selectedNode === n.id ? ' selected' : '')}
                     style={{ left: p.x, top: p.y, width: NODE_W, minHeight: NODE_H }}
+                    onClick={(ev) => { ev.stopPropagation(); setSelectedNode((prev) => (prev === n.id ? null : n.id)) }}
+                    title="Click to select this node for Start from node"
                   >
                     <div className="actl-node-head">
                       <span className="actl-node-label" title={nodeLabel(n)}>{nodeLabel(n)}</span>
