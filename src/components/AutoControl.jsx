@@ -152,15 +152,18 @@ export default function AutoControl({ userId }) {
           command,
           targets: cmdTargets || [],
           command_at: new Date().toISOString(),
-          ...(command === 'run' ? { run_id: newRunId() } : {}),
+          // 'xrestart' = Execute on one engine: it relaunches with a fresh
+          // container and runs the published graph under this new run id.
+          ...(command === 'run' || command === 'xrestart' ? { run_id: newRunId() } : {}),
         }
     const { error } = await supabase.from('auto_control').update(patch).eq('user_id', userId)
     if (error) { console.error(error); say('Could not send the command'); return }
     setControl((prev) => (prev ? { ...prev, ...patch } : prev))
     say(command === 'run'
       ? (cmdTargets?.length ? `Executing on ${cmdTargets.join(', ')}…` : `Executing on ${online.length} online PC${online.length === 1 ? '' : 's'}…`)
+      : command === 'xrestart' ? `Execute sent to ${cmdTargets?.join(', ') || 'PC'} — it relaunches and runs the preset…`
       : command === 'reset' ? 'Progress reset — bars cleared and every PC stopped'
-      : 'Stop sent to every PC')
+      : cmdTargets?.length ? `Stop sent to ${cmdTargets.join(', ')}` : 'Stop sent to every PC')
   }, [control, userId, online.length, say])
 
   // A badge's prompt can vanish while open (its engine stopped and cancelled it,
@@ -252,20 +255,6 @@ export default function AutoControl({ userId }) {
         </div>
       )}
 
-      {shots.length > 0 && (
-        <div className="actl-shots">
-          {shots.map((s) => (
-            <button key={s.id} className="actl-shot-badge" onClick={() => openShot(s)} title="A Sessions 4 PC is waiting for your decision — open the screenshot">
-              <span className="actl-shot-ping" />
-              <span className="actl-shot-badge-main">
-                <span className="actl-shot-badge-label">Shot check: {s.node_label || 'node'}</span>
-                <span className="actl-shot-badge-sub">{s.engine_code} · waiting for your choice</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {shotView && (
         <div className="actl-shot-modal" onClick={() => setShotView(null)}>
           <div className="actl-shot-card" onClick={(e) => e.stopPropagation()}>
@@ -308,6 +297,8 @@ export default function AutoControl({ userId }) {
           {engineList.map((e) => {
             const st = engineStatus(e)
             const on = isOnline(e)
+            const isRunning = on && e.status === 'running'
+            const pendingShot = shots.find((sh) => String(sh.engine_code) === String(e.code))
             return (
               <div key={e.id} className={'actl-engine' + (on ? '' : ' offline')}>
                 <span className={'actl-dot ' + (on ? 'on' : 'off')} />
@@ -316,14 +307,36 @@ export default function AutoControl({ userId }) {
                   <span className="actl-engine-name" title={e.name}>{e.name || 'PC'}</span>
                   <span className={'actl-engine-status ' + st.cls} title={st.text}>{st.text}</span>
                 </div>
-                <button
-                  className="btn ghost sm"
-                  disabled={!on || !nodes.length}
-                  onClick={() => sendCommand('run', [String(e.code)])}
-                  title={`Run the published graph on ${e.code} only`}
-                >
-                  Execute
-                </button>
+                {pendingShot ? (
+                  <button
+                    className="actl-shot-badge"
+                    onClick={() => openShot(pendingShot)}
+                    title={`${e.code} is waiting for your decision on “${pendingShot.node_label || 'node'}” — open the screenshot`}
+                  >
+                    <span className="actl-shot-ping" />
+                    <span className="actl-shot-badge-main">
+                      <span className="actl-shot-badge-label">Shot check</span>
+                      <span className="actl-shot-badge-sub">{pendingShot.node_label || 'node'}</span>
+                    </span>
+                  </button>
+                ) : isRunning ? (
+                  <button
+                    className="btn ghost sm actl-stop-btn"
+                    onClick={() => sendCommand('stop', [String(e.code)])}
+                    title={`Stop the run on ${e.code}`}
+                  >
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    className="btn ghost sm"
+                    disabled={!on || !nodes.length}
+                    onClick={() => sendCommand('xrestart', [String(e.code)])}
+                    title={`Execute on ${e.code}: the app relaunches with a fresh container and runs the published graph`}
+                  >
+                    Execute
+                  </button>
+                )}
               </div>
             )
           })}
