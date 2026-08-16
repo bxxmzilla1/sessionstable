@@ -217,6 +217,31 @@ drop policy if exists "auto_engines_manage_own" on public.auto_engines;
 create policy "auto_engines_manage_own" on public.auto_engines
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Shot check prompts: a Sessions 4 instance uploads a screenshot after a node ran
+-- and waits; the PWA shows it as a notification badge and writes the decision back
+-- ('' = pending, then 'continue' | 'retry' | 'xrestart'). The engine deletes the
+-- row once the decision is consumed.
+create table if not exists public.auto_shots (
+  id          uuid primary key,
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  engine_code text not null default '',
+  engine_name text not null default '',
+  node_label  text not null default '',
+  run_id      text not null default '',
+  shot        text not null default '',   -- jpeg data URL
+  decision    text not null default '',
+  created_at  timestamptz not null default now(),
+  decided_at  timestamptz
+);
+
+create index if not exists auto_shots_user_id_idx on public.auto_shots (user_id);
+
+alter table public.auto_shots enable row level security;
+
+drop policy if exists "auto_shots_manage_own" on public.auto_shots;
+create policy "auto_shots_manage_own" on public.auto_shots
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 create table if not exists public.auto_images (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users (id) on delete cascade,

@@ -839,6 +839,52 @@ body {
 .actl-chip.more { background: var(--surface3); color: var(--text2); border-color: var(--border2); }
 .actl-node-none { font-size: 10px; color: var(--muted); }
 
+/* Shot check notification badges (top-right, one per waiting PC) */
+.actl-shots {
+  position: absolute; top: 74px; right: 16px; z-index: 30;
+  display: flex; flex-direction: column; gap: 8px; max-width: 300px;
+}
+.actl { position: relative; }
+.actl-shot-badge {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  font: inherit; cursor: pointer; padding: 9px 12px;
+  background: var(--surface); color: var(--text);
+  border: 1.5px solid var(--accent-light); border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.22);
+  animation: actl-shot-in .25s ease;
+}
+.actl-shot-badge:hover { border-color: var(--accent); }
+@keyframes actl-shot-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.actl-shot-ping { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex-shrink: 0; animation: actl-pulse 1s infinite; }
+.actl-shot-badge-main { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.actl-shot-badge-label { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actl-shot-badge-sub { font-size: 11px; color: var(--muted); font-family: 'DM Mono', ui-monospace, monospace; letter-spacing: .5px; }
+
+/* Shot check decision modal */
+.actl-shot-modal {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 12, 26, 0.55); backdrop-filter: blur(2px);
+}
+.actl-shot-card {
+  display: flex; flex-direction: column; gap: 12px;
+  width: min(920px, calc(100vw - 40px)); max-height: calc(100vh - 40px);
+  padding: 16px; background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 16px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+.actl-shot-title { font-size: 13.5px; color: var(--text2); }
+.actl-shot-title b { color: var(--text); }
+.actl-shot-imgwrap {
+  flex: 1; min-height: 140px; overflow: auto;
+  display: flex; align-items: flex-start; justify-content: center;
+  background: #0c0a14; border: 1px solid var(--border); border-radius: 10px;
+}
+.actl-shot-imgwrap img { max-width: 100%; height: auto; display: block; }
+.actl-shot-loading { padding: 40px 18px; font-size: 13px; color: var(--muted); }
+.actl-shot-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.actl-shot-danger { color: var(--error); border-color: rgba(220, 38, 38, 0.4); }
+.actl-shot-danger:hover { background: rgba(220, 38, 38, 0.08); }
+
 @media (max-width: 768px) {
   .actl-body { flex-direction: column; }
   .actl-engines { width: 100%; max-height: 40%; border-right: none; border-bottom: 1px solid var(--border); }

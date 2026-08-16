@@ -42,6 +42,8 @@ export default function AutoControl({ userId }) {
   const [control, setControl] = useState(null)   // meta row (graph fetched separately)
   const [graph, setGraph] = useState(null)
   const [engines, setEngines] = useState([])
+  const [shots, setShots] = useState([])         // pending Shot check prompts (metadata only)
+  const [shotView, setShotView] = useState(null) // prompt opened from a badge (image fetched lazily)
   const [now, setNow] = useState(() => Date.now())
   const [flash, setFlash] = useState('')
   const [missing, setMissing] = useState(false)  // tables not created yet
@@ -88,9 +90,12 @@ export default function AutoControl({ userId }) {
     const tick = async () => {
       if (stopped) return
       try {
-        const [{ data: eng, error: e1 }, { data: ctl, error: e2 }] = await Promise.all([
+        const [{ data: eng, error: e1 }, { data: ctl, error: e2 }, { data: sh }] = await Promise.all([
           supabase.from('auto_engines').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
           supabase.from('auto_control').select('graph_name, run_id, command, targets, command_at, updated_at').eq('user_id', userId).maybeSingle(),
+          // Pending Shot check prompts — metadata only every second; the screenshot
+          // itself is fetched when a badge is opened. A missing table = no badges.
+          supabase.from('auto_shots').select('id, engine_code, engine_name, node_label, run_id, created_at').eq('user_id', userId).eq('decision', '').order('created_at', { ascending: true }),
         ])
         if (stopped) return
         if (e1 || e2) {
@@ -101,6 +106,7 @@ export default function AutoControl({ userId }) {
         setMissing(false)
         setEngines(eng || [])
         setControl(ctl || null)
+        setShots(sh || [])
         setNow(Date.now())
         if (ctl && ctl.updated_at !== graphStamp.current) {
           const { data: full } = await supabase.from('auto_control').select('graph, updated_at').eq('user_id', userId).maybeSingle()
@@ -156,6 +162,34 @@ export default function AutoControl({ userId }) {
       : command === 'reset' ? 'Progress reset — bars cleared and every PC stopped'
       : 'Stop sent to every PC')
   }, [control, userId, online.length, say])
+
+  // A badge's prompt can vanish while open (its engine stopped and cancelled it,
+  // or another device decided) — close the stale viewer.
+  useEffect(() => {
+    setShotView((prev) => (prev && !shots.some((s) => s.id === prev.id) ? null : prev))
+  }, [shots])
+
+  // Open a badge: show the modal immediately, pull the screenshot in the background.
+  const openShot = useCallback(async (s) => {
+    setShotView({ ...s, shot: null })
+    const { data, error } = await supabase.from('auto_shots').select('shot').eq('id', s.id).eq('user_id', userId).maybeSingle()
+    if (error || !data) { setShotView(null); say('This prompt is gone — the PC stopped or already moved on'); return }
+    setShotView((prev) => (prev && prev.id === s.id ? { ...prev, shot: data.shot || '' } : prev))
+  }, [userId, say])
+
+  // Write the decision back; the Sessions 4 instance polls it within ~1.5s and
+  // deletes the row once consumed.
+  const decideShot = useCallback(async (shotId, decision) => {
+    const { error } = await supabase.from('auto_shots')
+      .update({ decision, decided_at: new Date().toISOString() })
+      .eq('id', shotId).eq('user_id', userId)
+    if (error) { console.error(error); say('Could not send the decision'); return }
+    setShots((prev) => prev.filter((s) => s.id !== shotId))
+    setShotView(null)
+    say(decision === 'continue' ? 'Continuing to the next node'
+      : decision === 'retry' ? 'Retrying the node'
+      : 'XRestart sent — the PC relaunches and re-runs the preset')
+  }, [userId, say])
 
   // ── Graph geometry ──
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : []
@@ -215,6 +249,48 @@ export default function AutoControl({ userId }) {
       {missing && (
         <div className="actl-empty">
           The Auto Control tables are missing — run the updated <b>sessions-table/supabase.sql</b> in the Supabase SQL editor first.
+        </div>
+      )}
+
+      {shots.length > 0 && (
+        <div className="actl-shots">
+          {shots.map((s) => (
+            <button key={s.id} className="actl-shot-badge" onClick={() => openShot(s)} title="A Sessions 4 PC is waiting for your decision — open the screenshot">
+              <span className="actl-shot-ping" />
+              <span className="actl-shot-badge-main">
+                <span className="actl-shot-badge-label">Shot check: {s.node_label || 'node'}</span>
+                <span className="actl-shot-badge-sub">{s.engine_code} · waiting for your choice</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {shotView && (
+        <div className="actl-shot-modal" onClick={() => setShotView(null)}>
+          <div className="actl-shot-card" onClick={(e) => e.stopPropagation()}>
+            <div className="actl-shot-title">
+              Shot check — <b>{shotView.node_label || 'node'}</b> just ran on {shotView.engine_code}{shotView.engine_name ? ` (${shotView.engine_name})` : ''}. What next?
+            </div>
+            <div className="actl-shot-imgwrap">
+              {shotView.shot == null
+                ? <div className="actl-shot-loading">Loading screenshot…</div>
+                : shotView.shot
+                  ? <img src={shotView.shot} alt="Browser screenshot" />
+                  : <div className="actl-shot-loading">No screenshot was captured — decide from what the PC reports.</div>}
+            </div>
+            <div className="actl-shot-actions">
+              <button className="btn primary sm" onClick={() => decideShot(shotView.id, 'continue')} title="Everything looks right — move on to the next node">
+                Continue to next node
+              </button>
+              <button className="btn ghost sm" onClick={() => decideShot(shotView.id, 'retry')} title="Run this same node again">
+                Retry this node
+              </button>
+              <button className="btn ghost sm actl-shot-danger" onClick={() => decideShot(shotView.id, 'xrestart')} title="Close Sessions 4 completely on that PC, relaunch it with a fresh container, and re-run the preset from the beginning">
+                XRestart
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
