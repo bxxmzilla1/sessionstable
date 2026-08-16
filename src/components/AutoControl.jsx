@@ -49,6 +49,9 @@ export default function AutoControl({ userId }) {
   const [missing, setMissing] = useState(false)  // tables not created yet
   const graphStamp = useRef(null)
   const flashTimer = useRef(null)
+  const seenManual = useRef(new Set()) // manual screenshots already auto-opened
+  const shotViewRef = useRef(null)
+  const openShotRef = useRef(null)
   const graphWrapRef = useRef(null)
   const panRef = useRef(null)
 
@@ -93,9 +96,10 @@ export default function AutoControl({ userId }) {
         const [{ data: eng, error: e1 }, { data: ctl, error: e2 }, { data: sh }] = await Promise.all([
           supabase.from('auto_engines').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
           supabase.from('auto_control').select('graph_name, run_id, command, targets, command_at, updated_at').eq('user_id', userId).maybeSingle(),
-          // Pending Shot check prompts — metadata only every second; the screenshot
-          // itself is fetched when a badge is opened. A missing table = no badges.
-          supabase.from('auto_shots').select('id, engine_code, engine_name, node_label, run_id, created_at').eq('user_id', userId).eq('decision', '').order('created_at', { ascending: true }),
+          // Shot check prompts (decision '') and on-demand screenshots (decision
+          // 'view') — metadata only every second; the image itself is fetched when
+          // opened. A missing table = no badges.
+          supabase.from('auto_shots').select('id, engine_code, engine_name, node_label, run_id, decision, created_at').eq('user_id', userId).in('decision', ['', 'view']).order('created_at', { ascending: true }),
         ])
         if (stopped) return
         if (e1 || e2) {
@@ -106,8 +110,14 @@ export default function AutoControl({ userId }) {
         setMissing(false)
         setEngines(eng || [])
         setControl(ctl || null)
-        setShots(sh || [])
+        setShots((sh || []).filter((s) => !s.decision))
         setNow(Date.now())
+        // A requested screenshot just arrived — open it (unless a prompt is already up).
+        const manual = (sh || []).find((s) => s.decision === 'view' && !seenManual.current.has(s.id))
+        if (manual && !shotViewRef.current) {
+          seenManual.current.add(manual.id)
+          openShotRef.current?.({ ...manual, view: true })
+        }
         if (ctl && ctl.updated_at !== graphStamp.current) {
           const { data: full } = await supabase.from('auto_control').select('graph, updated_at').eq('user_id', userId).maybeSingle()
           if (stopped || !full) return
@@ -161,16 +171,21 @@ export default function AutoControl({ userId }) {
     setControl((prev) => (prev ? { ...prev, ...patch } : prev))
     say(command === 'run'
       ? (cmdTargets?.length ? `Executing on ${cmdTargets.join(', ')}…` : `Executing on ${online.length} online PC${online.length === 1 ? '' : 's'}…`)
-      : command === 'xrestart' ? `Execute sent to ${cmdTargets?.join(', ') || 'PC'} — it relaunches and runs the preset…`
+      : command === 'xrestart' ? `XRestart sent to ${cmdTargets?.join(', ') || 'PC'} — it relaunches and runs the preset…`
+      : command === 'shot' ? `Screenshot requested from ${cmdTargets?.join(', ') || 'PC'} — it opens here in a moment…`
+      : command === 'launch' ? `Launch sent via ${cmdTargets?.join(', ') || 'PC'} — a new Sessions 4 window is starting on that PC…`
+      : command === 'newsession' ? `Create New Session sent to ${cmdTargets?.join(', ') || 'PC'}…`
       : command === 'reset' ? 'Progress reset — bars cleared and every PC stopped'
       : cmdTargets?.length ? `Stop sent to ${cmdTargets.join(', ')}` : 'Stop sent to every PC')
   }, [control, userId, online.length, say])
 
   // A badge's prompt can vanish while open (its engine stopped and cancelled it,
-  // or another device decided) — close the stale viewer.
+  // or another device decided) — close the stale viewer. On-demand screenshots
+  // ('view') aren't in `shots`, so they're never force-closed here.
   useEffect(() => {
-    setShotView((prev) => (prev && !shots.some((s) => s.id === prev.id) ? null : prev))
+    setShotView((prev) => (prev && !prev.view && !shots.some((s) => s.id === prev.id) ? null : prev))
   }, [shots])
+  useEffect(() => { shotViewRef.current = shotView }, [shotView])
 
   // Open a badge: show the modal immediately, pull the screenshot in the background.
   const openShot = useCallback(async (s) => {
@@ -179,6 +194,15 @@ export default function AutoControl({ userId }) {
     if (error || !data) { setShotView(null); say('This prompt is gone — the PC stopped or already moved on'); return }
     setShotView((prev) => (prev && prev.id === s.id ? { ...prev, shot: data.shot || '' } : prev))
   }, [userId, say])
+  useEffect(() => { openShotRef.current = openShot }, [openShot])
+
+  // Close the viewer; a manual screenshot's row is deleted (it was view-only).
+  const dismissShot = useCallback((sv) => {
+    setShotView(null)
+    if (sv?.view && sv.id) {
+      supabase.from('auto_shots').delete().eq('id', sv.id).eq('user_id', userId).then(() => {}, () => {})
+    }
+  }, [userId])
 
   // Write the decision back; the Sessions 4 instance polls it within ~1.5s and
   // deletes the row once consumed.
@@ -256,28 +280,36 @@ export default function AutoControl({ userId }) {
       )}
 
       {shotView && (
-        <div className="actl-shot-modal" onClick={() => setShotView(null)}>
+        <div className="actl-shot-modal" onClick={() => dismissShot(shotView)}>
           <div className="actl-shot-card" onClick={(e) => e.stopPropagation()}>
             <div className="actl-shot-title">
-              Shot check — <b>{shotView.node_label || 'node'}</b> just ran on {shotView.engine_code}{shotView.engine_name ? ` (${shotView.engine_name})` : ''}. What next?
+              {shotView.view
+                ? <>Screenshot — <b>{shotView.engine_code}</b>{shotView.engine_name ? ` (${shotView.engine_name})` : ''}</>
+                : <>Shot check — <b>{shotView.node_label || 'node'}</b> just ran on {shotView.engine_code}{shotView.engine_name ? ` (${shotView.engine_name})` : ''}. What next?</>}
             </div>
             <div className="actl-shot-imgwrap">
               {shotView.shot == null
                 ? <div className="actl-shot-loading">Loading screenshot…</div>
                 : shotView.shot
                   ? <img src={shotView.shot} alt="Browser screenshot" />
-                  : <div className="actl-shot-loading">No screenshot was captured — decide from what the PC reports.</div>}
+                  : <div className="actl-shot-loading">{shotView.view ? 'Nothing to capture — no container is open on that PC.' : 'No screenshot was captured — decide from what the PC reports.'}</div>}
             </div>
             <div className="actl-shot-actions">
-              <button className="btn primary sm" onClick={() => decideShot(shotView.id, 'continue')} title="Everything looks right — move on to the next node">
-                Continue to next node
-              </button>
-              <button className="btn ghost sm" onClick={() => decideShot(shotView.id, 'retry')} title="Run this same node again">
-                Retry this node
-              </button>
-              <button className="btn ghost sm actl-shot-danger" onClick={() => decideShot(shotView.id, 'xrestart')} title="Close Sessions 4 completely on that PC, relaunch it with a fresh container, and re-run the preset from the beginning">
-                XRestart
-              </button>
+              {shotView.view ? (
+                <button className="btn primary sm" onClick={() => dismissShot(shotView)}>Close</button>
+              ) : (
+                <>
+                  <button className="btn primary sm" onClick={() => decideShot(shotView.id, 'continue')} title="Everything looks right — move on to the next node">
+                    Continue to next node
+                  </button>
+                  <button className="btn ghost sm" onClick={() => decideShot(shotView.id, 'retry')} title="Run this same node again">
+                    Retry this node
+                  </button>
+                  <button className="btn ghost sm actl-shot-danger" onClick={() => decideShot(shotView.id, 'xrestart')} title="Close Sessions 4 completely on that PC, relaunch it with a fresh container, and re-run the preset from the beginning">
+                    XRestart
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -298,14 +330,24 @@ export default function AutoControl({ userId }) {
             const st = engineStatus(e)
             const on = isOnline(e)
             const isRunning = on && e.status === 'running'
+            const hasError = on && e.status === 'error'
             const pendingShot = shots.find((sh) => String(sh.engine_code) === String(e.code))
+            // Offline engine: another online instance on the same PC (hostname
+            // without the " #2" suffix) can spawn a new Sessions 4 window there.
+            const baseHost = (n) => String(n || '').replace(/ #\d+$/, '').trim().toLowerCase()
+            const launcher = !on && baseHost(e.name)
+              ? online.find((o) => baseHost(o.name) === baseHost(e.name))
+              : null
+            const statusText = !on
+              ? (launcher ? `Offline — PC online via ${launcher.code}` : 'Offline — PC not reachable')
+              : st.text
             return (
               <div key={e.id} className={'actl-engine' + (on ? '' : ' offline')}>
                 <span className={'actl-dot ' + (on ? 'on' : 'off')} />
                 <div className="actl-engine-main">
                   <span className="actl-engine-code">{e.code || '——————'}</span>
                   <span className="actl-engine-name" title={e.name}>{e.name || 'PC'}</span>
-                  <span className={'actl-engine-status ' + st.cls} title={st.text}>{st.text}</span>
+                  <span className={'actl-engine-status ' + st.cls} title={statusText}>{statusText}</span>
                 </div>
                 {pendingShot ? (
                   <button
@@ -319,23 +361,65 @@ export default function AutoControl({ userId }) {
                       <span className="actl-shot-badge-sub">{pendingShot.node_label || 'node'}</span>
                     </span>
                   </button>
-                ) : isRunning ? (
-                  <button
-                    className="btn ghost sm actl-stop-btn"
-                    onClick={() => sendCommand('stop', [String(e.code)])}
-                    title={`Stop the run on ${e.code}`}
-                  >
-                    Stop
-                  </button>
                 ) : (
-                  <button
-                    className="btn ghost sm"
-                    disabled={!on || !nodes.length}
-                    onClick={() => sendCommand('xrestart', [String(e.code)])}
-                    title={`Execute on ${e.code}: the app relaunches with a fresh container and runs the published graph`}
-                  >
-                    Execute
-                  </button>
+                  <div className="actl-engine-btns">
+                    {on && (
+                      <button
+                        className="btn ghost sm"
+                        onClick={() => sendCommand('shot', [String(e.code)])}
+                        title={`Take a screenshot of ${e.code}'s browser right now`}
+                      >
+                        Screenshot
+                      </button>
+                    )}
+                    {on && !isRunning && (
+                      <button
+                        className="btn ghost sm"
+                        onClick={() => sendCommand('newsession', [String(e.code)])}
+                        title={`Press Create New Session on ${e.code}`}
+                      >
+                        New session
+                      </button>
+                    )}
+                    {isRunning ? (
+                      <button
+                        className="btn ghost sm actl-stop-btn"
+                        onClick={() => sendCommand('stop', [String(e.code)])}
+                        title={`Stop the run on ${e.code}`}
+                      >
+                        Stop
+                      </button>
+                    ) : hasError ? (
+                      <button
+                        className="btn ghost sm actl-stop-btn"
+                        disabled={!nodes.length}
+                        onClick={() => sendCommand('xrestart', [String(e.code)])}
+                        title={`${e.code} reported an error — XRestart relaunches it with a fresh container and re-runs the published graph`}
+                      >
+                        XRestart
+                      </button>
+                    ) : on ? (
+                      <button
+                        className="btn ghost sm"
+                        disabled={!nodes.length}
+                        onClick={() => sendCommand('xrestart', [String(e.code)])}
+                        title={`Execute on ${e.code}: the app relaunches with a fresh container and runs the published graph`}
+                      >
+                        Execute
+                      </button>
+                    ) : (
+                      <button
+                        className="btn ghost sm"
+                        disabled={!launcher}
+                        onClick={() => launcher && sendCommand('launch', [String(launcher.code)])}
+                        title={launcher
+                          ? `Launch a new Sessions 4 window on ${e.name || 'that PC'} via the online instance ${launcher.code}`
+                          : 'No online Sessions 4 instance on that PC — open the app there manually first'}
+                      >
+                        Execute
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )

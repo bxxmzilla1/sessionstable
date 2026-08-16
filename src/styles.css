@@ -856,6 +856,8 @@ body {
 .actl-shot-badge-sub { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .actl-stop-btn { color: var(--error); border-color: rgba(220, 38, 38, 0.4); }
 .actl-stop-btn:hover { background: rgba(220, 38, 38, 0.08); }
+.actl-engine-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.actl-engine-btns .btn { width: 100%; white-space: nowrap; }
 
 /* Shot check decision modal */
 .actl-shot-modal {

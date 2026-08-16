@@ -92,7 +92,14 @@ export default function App() {
   const [vpnOpen, setVpnOpen] = useState(false)
   const [vpnPreset, setVpnPreset] = useState(null)
   const [proxyOpen, setProxyOpen] = useState(false)
-  const [autoOpen, setAutoOpen] = useState(false)
+  // Remembered per device so a refresh lands back in Auto Control.
+  const [autoOpen, setAutoOpenRaw] = useState(() => {
+    try { return localStorage.getItem('st_auto_open') === '1' } catch (_) { return false }
+  })
+  const setAutoOpen = (v) => {
+    setAutoOpenRaw(v)
+    try { localStorage.setItem('st_auto_open', v ? '1' : '0') } catch (_) {}
+  }
   const [flash, setFlash] = useState('')
   // Workspace sharing: share rows visible to me (mine + ones I've joined), and the
   // sheet documents of owners who shared a workspace with me.
