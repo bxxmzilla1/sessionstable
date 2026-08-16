@@ -14,6 +14,7 @@ import { ShareModal, JoinModal } from './components/ShareModal'
 import ConfirmModal from './components/ConfirmModal'
 import VpnScreen from './components/VpnScreen'
 import ProxyGrabber from './components/ProxyGrabber'
+import AutoControl from './components/AutoControl'
 import FooterNav from './components/FooterNav'
 import Icon from './Icon'
 import { deleteBundleTeams } from './bundle'
@@ -91,6 +92,7 @@ export default function App() {
   const [vpnOpen, setVpnOpen] = useState(false)
   const [vpnPreset, setVpnPreset] = useState(null)
   const [proxyOpen, setProxyOpen] = useState(false)
+  const [autoOpen, setAutoOpen] = useState(false)
   const [flash, setFlash] = useState('')
   // Workspace sharing: share rows visible to me (mine + ones I've joined), and the
   // sheet documents of owners who shared a workspace with me.
@@ -838,6 +840,12 @@ export default function App() {
           <VpnScreen workspaces={allWorkspaces} preset={vpnPreset} onConsumePreset={() => setVpnPreset(null)} />
         </div>
       )}
+      {autoOpen && (
+        <div className="vpn-overlay">
+          <button className="vpn-close" onClick={() => setAutoOpen(false)} title="Close"><Icon name="close" size={18} /></button>
+          <AutoControl userId={session.user.id} />
+        </div>
+      )}
       {proxyOpen && (
         <div className="vpn-overlay">
           <button className="vpn-close" onClick={() => setProxyOpen(false)} title="Close"><Icon name="close" size={18} /></button>
@@ -899,6 +907,7 @@ export default function App() {
           onJoin={() => setJoinOpen(true)}
           onSettings={() => setSettingsOpen(true)}
           onProxy={() => setProxyOpen(true)}
+          onAuto={() => setAutoOpen(true)}
         />
         {footer}
         {overlays}
@@ -956,6 +965,7 @@ export default function App() {
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'All changes saved' : status === 'error' ? 'Save failed' : ''}
         </span>
         <span className="email" title={session.user.email}>{session.user.email}</span>
+        <button className="btn ghost sm icon-txt" onClick={() => setAutoOpen(true)} title="Auto Control — run the published Auto graph on every online Sessions 4 PC"><Icon name="bolt" size={15} /><span className="hide-sm">Auto Control</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => setProxyOpen(true)} title="Proxy Grabber"><Icon name="vpn" size={15} /><span className="hide-sm">Proxy Grabber</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => setSettingsOpen(true)} title="Settings"><Icon name="settings" size={15} /><span className="hide-sm">Settings</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => supabase.auth.signOut()} title="Sign out"><Icon name="signout" size={15} /><span className="hide-sm">Sign out</span></button>

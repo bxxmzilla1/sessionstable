@@ -164,3 +164,74 @@ begin
 end $$;
 
 grant execute on function public.delete_session_link(text) to authenticated;
+
+-- ── Image Selector album (Sessions 4 "Auto" feature) ──────────────────────────
+-- Images the Auto window's "Image Selector" node feeds into a page's file dialog.
+-- Stored per account (base64 in `data`, small preview in `thumb`) so the album
+-- follows the Sessions 4 login to any PC. `is_default` marks the image the node
+-- uses; the app keeps at most one default per account.
+
+-- ── Auto Control (multi-PC node-graph execution) ──────────────────────────────
+-- One control document per account (`auto_control`): the published node graph plus
+-- the latest run/stop command. Every running Sessions 4 instance ("engine") keeps a
+-- row in `auto_engines` alive with a 1-second heartbeat carrying its per-node run
+-- progress. The Sessions Table PWA renders the graph, shows which engines are
+-- online (by code), executes them, and draws per-node completion bars.
+
+create table if not exists public.auto_control (
+  user_id    uuid primary key references auth.users (id) on delete cascade,
+  graph      jsonb not null default '{}'::jsonb,
+  graph_name text not null default '',
+  command    text not null default '',       -- 'run' | 'stop' | ''
+  run_id     text not null default '',
+  targets    jsonb not null default '[]'::jsonb, -- engine codes; [] = every online engine
+  command_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.auto_control enable row level security;
+
+drop policy if exists "auto_control_manage_own" on public.auto_control;
+create policy "auto_control_manage_own" on public.auto_control
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create table if not exists public.auto_engines (
+  id         uuid primary key,               -- per-boot instance id (engine supplies it)
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  code       text not null default '',       -- stable engine code shown in the PWA
+  name       text not null default '',       -- PC hostname
+  status     text not null default 'idle',   -- idle | running | done | error
+  run_id     text not null default '',
+  node_id    text not null default '',       -- node currently executing
+  done_nodes jsonb not null default '[]'::jsonb,
+  error      text not null default '',
+  last_seen  timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists auto_engines_user_id_idx on public.auto_engines (user_id);
+
+alter table public.auto_engines enable row level security;
+
+drop policy if exists "auto_engines_manage_own" on public.auto_engines;
+create policy "auto_engines_manage_own" on public.auto_engines
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create table if not exists public.auto_images (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  name       text not null default 'image',
+  mime       text not null default 'image/jpeg',
+  data       text not null,
+  thumb      text not null default '',
+  is_default boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists auto_images_user_id_idx on public.auto_images (user_id);
+
+alter table public.auto_images enable row level security;
+
+drop policy if exists "auto_images_manage_own" on public.auto_images;
+create policy "auto_images_manage_own" on public.auto_images
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
