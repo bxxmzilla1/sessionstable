@@ -111,17 +111,22 @@ export default function AutoControl({ userId }) {
 
   const sendCommand = useCallback(async (command, cmdTargets) => {
     if (!control) { say('Publish a graph from the Sessions 4 Auto window first'); return }
-    const patch = {
-      command,
-      targets: cmdTargets || [],
-      command_at: new Date().toISOString(),
-      ...(command === 'run' ? { run_id: newRunId() } : {}),
-    }
+    // "reset" stops every PC AND clears the run id, so all bars and per-engine
+    // run states fall back to zero — a clean slate for the next Execute.
+    const patch = command === 'reset'
+      ? { command: 'stop', run_id: '', targets: [], command_at: new Date().toISOString() }
+      : {
+          command,
+          targets: cmdTargets || [],
+          command_at: new Date().toISOString(),
+          ...(command === 'run' ? { run_id: newRunId() } : {}),
+        }
     const { error } = await supabase.from('auto_control').update(patch).eq('user_id', userId)
     if (error) { console.error(error); say('Could not send the command'); return }
     setControl((prev) => (prev ? { ...prev, ...patch } : prev))
     say(command === 'run'
       ? (cmdTargets?.length ? `Executing on ${cmdTargets.join(', ')}…` : `Executing on ${online.length} online PC${online.length === 1 ? '' : 's'}…`)
+      : command === 'reset' ? 'Progress reset — bars cleared and every PC stopped'
       : 'Stop sent to every PC')
   }, [control, userId, online.length, say])
 
@@ -174,6 +179,9 @@ export default function AutoControl({ userId }) {
         </button>
         <button className="btn ghost sm" disabled={!anyRunning} onClick={() => sendCommand('stop', [])} title="Stop the run on every PC">
           Stop all
+        </button>
+        <button className="btn ghost sm" disabled={!control || !runId} onClick={() => sendCommand('reset', [])} title="Reset the node graph's progress — stops every PC and clears all percentage bars and performed-by chips">
+          Reset
         </button>
       </div>
 
