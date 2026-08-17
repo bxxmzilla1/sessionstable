@@ -15,6 +15,7 @@ import ConfirmModal from './components/ConfirmModal'
 import VpnScreen from './components/VpnScreen'
 import ProxyGrabber from './components/ProxyGrabber'
 import AutoControl from './components/AutoControl'
+import SessionsLite from './components/SessionsLite'
 import FooterNav from './components/FooterNav'
 import Icon from './Icon'
 import { deleteBundleTeams } from './bundle'
@@ -92,6 +93,7 @@ export default function App() {
   const [vpnOpen, setVpnOpen] = useState(false)
   const [vpnPreset, setVpnPreset] = useState(null)
   const [proxyOpen, setProxyOpen] = useState(false)
+  const [liteOpen, setLiteOpen] = useState(false)
   // Remembered per device so a refresh lands back in Auto Control.
   const [autoOpen, setAutoOpenRaw] = useState(() => {
     try { return localStorage.getItem('st_auto_open') === '1' } catch (_) { return false }
@@ -853,6 +855,12 @@ export default function App() {
           <AutoControl userId={session.user.id} />
         </div>
       )}
+      {liteOpen && (
+        <div className="vpn-overlay">
+          <button className="vpn-close" onClick={() => setLiteOpen(false)} title="Close"><Icon name="close" size={18} /></button>
+          <SessionsLite userId={session.user.id} />
+        </div>
+      )}
       {proxyOpen && (
         <div className="vpn-overlay">
           <button className="vpn-close" onClick={() => setProxyOpen(false)} title="Close"><Icon name="close" size={18} /></button>
@@ -915,6 +923,7 @@ export default function App() {
           onSettings={() => setSettingsOpen(true)}
           onProxy={() => setProxyOpen(true)}
           onAuto={() => setAutoOpen(true)}
+          onLite={() => setLiteOpen(true)}
         />
         {footer}
         {overlays}
@@ -973,6 +982,7 @@ export default function App() {
         </span>
         <span className="email" title={session.user.email}>{session.user.email}</span>
         <button className="btn ghost sm icon-txt" onClick={() => setAutoOpen(true)} title="Auto Control — run the published Auto graph on every online Sessions 4 PC"><Icon name="bolt" size={15} /><span className="hide-sm">Auto Control</span></button>
+        <button className="btn ghost sm icon-txt" onClick={() => setLiteOpen(true)} title="Sessions Lite — spin up headless browsers on any online PC"><Icon name="rocket" size={15} /><span className="hide-sm">Sessions Lite</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => setProxyOpen(true)} title="Proxy Grabber"><Icon name="vpn" size={15} /><span className="hide-sm">Proxy Grabber</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => setSettingsOpen(true)} title="Settings"><Icon name="settings" size={15} /><span className="hide-sm">Settings</span></button>
         <button className="btn ghost sm icon-txt" onClick={() => supabase.auth.signOut()} title="Sign out"><Icon name="signout" size={15} /><span className="hide-sm">Sign out</span></button>

@@ -9,7 +9,7 @@ function initials(name) {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-export default function Home({ workspaces, sharedCodes = {}, onOpen, onCreate, onRename, onDelete, onShare, onJoin, onSettings, onProxy, onAuto }) {
+export default function Home({ workspaces, sharedCodes = {}, onOpen, onCreate, onRename, onDelete, onShare, onJoin, onSettings, onProxy, onAuto, onLite }) {
   const [editing, setEditing] = useState(null)
   const [menu, setMenu] = useState(null)
   // On phones the sidebar is a slide-in drawer; on desktop it's always visible.
@@ -28,6 +28,7 @@ export default function Home({ workspaces, sharedCodes = {}, onOpen, onCreate, o
         <div className="hs-brand"><span className="logo"><Icon name="table" size={16} /></span> Sessions Table</div>
         <button className="hs-nav on"><Icon name="home" size={16} /> Home</button>
         <button className="hs-nav" onClick={() => { setSideOpen(false); onAuto && onAuto() }}><Icon name="bolt" size={16} /> Auto Control</button>
+        <button className="hs-nav" onClick={() => { setSideOpen(false); onLite && onLite() }}><Icon name="rocket" size={16} /> Sessions Lite</button>
         <button className="hs-nav" onClick={() => { setSideOpen(false); onProxy && onProxy() }}><Icon name="vpn" size={16} /> Proxy Grabber</button>
         <button className="hs-nav" onClick={() => { setSideOpen(false); onSettings() }}><Icon name="settings" size={16} /> Settings</button>
         <div className="hs-section">
