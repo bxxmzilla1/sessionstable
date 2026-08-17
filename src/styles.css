@@ -773,31 +773,6 @@ body {
   .pg-lists { width: 100%; }
 }
 
-/* ── Sessions Lite (headless-browser fleet) ── */
-.slt { min-height: 100%; padding: 28px 18px 100px; background: radial-gradient(ellipse 80% 45% at 50% 0%, rgba(124,58,237,0.14), transparent 60%), var(--bg); }
-.slt-head { display: flex; align-items: center; gap: 14px; margin: 0 auto 24px; width: min(980px, 100%); padding-right: 48px; }
-.slt-badge {
-  width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #7c3aed, #4f46e5); color: #fff; flex-shrink: 0;
-}
-.slt-head h1 { margin: 0; font-size: 22px; }
-.slt-sub { margin: 2px 0 0; color: var(--text2); font-size: 13px; }
-.slt-count { color: var(--text2); font-size: 13px; white-space: nowrap; }
-.slt-empty { width: min(980px, 100%); margin: 0 auto; padding: 28px; text-align: center; color: var(--text2); border: 1px dashed var(--border); border-radius: 14px; }
-.slt-grid { width: min(980px, 100%); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-.slt-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-sm); }
-.slt-card.offline { opacity: .6; }
-.slt-card-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.slt-code { font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: 1px; }
-.slt-name { color: var(--text2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.slt-status { font-size: 12.5px; color: var(--text2); }
-.slt-status.run { color: var(--accent); }
-.slt-status.ok { color: var(--ok); }
-.slt-status.off { color: var(--muted); }
-.slt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.slt-actions .btn { flex: 1; white-space: nowrap; }
-.slt-danger:not(:disabled):hover { border-color: #f87171; color: #f87171; }
-
 /* ── Auto Control (multi-PC node-graph execution) ── */
 .actl { height: 100%; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
 .actl-head {
